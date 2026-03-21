@@ -1,0 +1,259 @@
+/* App-specific styles */
+
+/* Smooth transitions for theme changes */
+* {
+  transition-property: background-color, border-color;
+  transition-duration: 0ms;
+}
+
+/* Line clamp utilities */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Custom prose styles for storybook */
+.prose h3 {
+  @apply font-heading font-semibold text-xl mt-8 mb-4;
+}
+
+.prose p {
+  @apply mb-4;
+}
+
+.prose ul {
+  @apply list-disc pl-6 mb-4 space-y-1;
+}
+
+.prose ol {
+  @apply list-decimal pl-6 mb-4 space-y-1;
+}
+
+.prose code {
+  @apply font-mono text-sm bg-muted px-1.5 py-0.5 rounded;
+}
+
+/* Animation for status dots */
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Card hover lift effect */
+.card-lift {
+  @apply transition-transform duration-200;
+}
+
+.card-lift:hover {
+  @apply -translate-y-0.5;
+}
+
+/* Gradient backgrounds */
+.gradient-ramp {
+  background: linear-gradient(135deg, rgba(79, 109, 255, 0.1) 0%, rgba(79, 109, 255, 0) 50%);
+}
+
+/* Glass morphism */
+.glass-panel {
+  @apply bg-white/80 dark:bg-black/50 backdrop-blur-xl border border-white/20 dark:border-white/10;
+}
+
+/* Custom scrollbar for webkit browsers */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/20 rounded-full;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/30;
+}
+
+/* Focus ring styles */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-ramp-blue focus:ring-offset-2 focus:ring-offset-background;
+}
+
+/* Button press effect */
+.btn-press {
+  @apply active:scale-95 transition-transform;
+}
+
+/* Skeleton loading animation */
+@keyframes skeleton {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted-foreground) / 0.1) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton 1.5s ease-in-out infinite;
+}
+
+/* Tooltip arrow */
+.tooltip-arrow::before {
+  content: '';
+  @apply absolute w-2 h-2 bg-popover rotate-45;
+}
+
+/* Dropdown menu animation */
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.dropdown-animate {
+  animation: dropdown-in 0.15s ease-out;
+}
+
+/* Modal backdrop blur */
+.modal-backdrop {
+  @apply bg-black/50 backdrop-blur-sm;
+}
+
+/* Input focus styles */
+.input-focus {
+  @apply focus:ring-2 focus:ring-ramp-blue/20 focus:border-ramp-blue transition-all;
+}
+
+/* Badge variants */
+.badge-glow {
+  box-shadow: 0 0 10px currentColor;
+}
+
+/* Architecture diagram styles */
+.architecture-node {
+  @apply transition-all duration-200 cursor-pointer;
+}
+
+.architecture-node:hover {
+  @apply scale-105 shadow-lg;
+}
+
+.architecture-edge {
+  @apply transition-all duration-300;
+}
+
+/* Flow step connector */
+.flow-connector {
+  @apply absolute left-6 w-0.5 bg-border;
+}
+
+/* Chat message bubble */
+.chat-bubble {
+  @apply relative;
+}
+
+.chat-bubble::before {
+  content: '';
+  @apply absolute w-2 h-2 bg-inherit rotate-45;
+}
+
+.chat-bubble-user::before {
+  @apply -right-1 top-4;
+}
+
+.chat-bubble-assistant::before {
+  @apply -left-1 top-4;
+}
+
+/* Loading spinner */
+.spinner {
+  @apply animate-spin;
+}
+
+/* Progress bar animation */
+@keyframes progress-shine {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.progress-animated {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--ramp-blue)) 0%,
+    hsl(var(--ramp-blue-light)) 50%,
+    hsl(var(--ramp-blue)) 100%
+  );
+  background-size: 200% 100%;
+  animation: progress-shine 2s linear infinite;
+}
+
+/* Repository card hover */
+.repo-card {
+  @apply transition-all duration-200;
+}
+
+.repo-card:hover {
+  @apply border-ramp-blue/30 bg-ramp-blue/5;
+}
+
+/* Team member row */
+.team-member-row {
+  @apply transition-colors duration-150;
+}
+
+.team-member-row:hover {
+  @apply bg-muted/50;
+}
+
+/* Settings tab active indicator */
+.tab-active {
+  @apply relative;
+}
+
+.tab-active::after {
+  content: '';
+  @apply absolute bottom-0 left-0 right-0 h-0.5 bg-ramp-blue;
+}
