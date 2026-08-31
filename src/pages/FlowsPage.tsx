@@ -1,8 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import type { ApiFlowGraph, ApiFlowNode, ApiFlowEdge, DiscoveredFlowSummary, FlowStoryResponse } from '@/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 import {
-  Workflow, ZoomIn, ZoomOut, Maximize2, Search, Loader2,
+  Workflow, ZoomIn, ZoomOut, Maximize2, Search,
   Sparkles, X, ChevronLeft, ChevronRight, BookOpen,
   FunctionSquare, Server, Database, ExternalLink, AlertCircle,
 } from 'lucide-react';
@@ -137,7 +142,7 @@ function stepIcon(type: string) {
 
 // ─── Loading overlay ──────────────────────────────────────────────────────────
 
-function LoadingOverlay({ isDark, message }: { isDark: boolean; message: string }) {
+function LoadingOverlay({ message }: { message: string }) {
   const [idx, setIdx] = useState(0);
   const [vis, setVis] = useState(true);
   useEffect(() => {
@@ -148,19 +153,19 @@ function LoadingOverlay({ isDark, message }: { isDark: boolean; message: string 
     return () => clearInterval(t);
   }, []);
   return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: isDark ? '#0a0d12' : '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ position: 'relative', width: 72, height: 72, marginBottom: 28 }}>
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background">
+      <div className="relative mb-7 h-[72px] w-[72px]">
         {[0, 8, 16].map((inset, i) => (
-          <div key={i} style={{ position: 'absolute', inset, borderRadius: '50%', border: `1px solid rgba(59,130,246,${0.12 + i * 0.1})`, animation: `fp-ping 2s ease-out infinite ${i * 0.4}s` }} />
+          <div key={i} style={{ inset }} className="absolute animate-ping rounded-full border border-ramp-blue/30" />
         ))}
-        <div style={{ position: 'absolute', inset: 22, borderRadius: '50%', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Sparkles style={{ width: 14, height: 14, color: '#60a5fa' }} />
+        <div className="absolute inset-[22px] flex items-center justify-center rounded-full border border-ramp-blue/60 bg-ramp-blue/15">
+          <Sparkles className="h-3.5 w-3.5 text-ramp-blue" />
         </div>
       </div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: isDark ? '#e2e8f0' : '#0f172a', marginBottom: 10 }}>{message}</div>
-      <div style={{ fontSize: 12, color: isDark ? '#475569' : '#64748b', opacity: vis ? 1 : 0, transition: 'opacity 0.4s', minHeight: 18 }}>{LOADING_PHRASES[idx]}</div>
-      <div style={{ width: 180, height: 2, background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', borderRadius: 2, marginTop: 28, overflow: 'hidden' }}>
-        <div style={{ height: '100%', background: 'linear-gradient(90deg,#3b82f6,#a855f7)', borderRadius: 2, animation: 'fp-progress 6s linear forwards' }} />
+      <div className="mb-2.5 text-base font-bold text-foreground">{message}</div>
+      <div style={{ opacity: vis ? 1 : 0 }} className="text-xs text-muted-foreground transition-opacity duration-[400ms]">{LOADING_PHRASES[idx]}</div>
+      <div className="mt-7 h-0.5 w-[180px] overflow-hidden rounded-full bg-border/10">
+        <div className="h-full w-full animate-pulse-glow rounded-full bg-gradient-to-r from-ramp-blue to-[#a855f7]" />
       </div>
     </div>
   );
@@ -187,55 +192,64 @@ function StoryCard({ flow, stepIdx, onPrev, onNext, onExit, isDark }: {
   }, [onNext, onPrev, onExit]);
 
   return (
-    <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 20, width: 480, maxWidth: 'calc(100vw - 48px)', background: isDark ? 'rgba(10,13,20,0.97)' : 'rgba(255,255,255,0.98)', border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, borderRadius: 16, backdropFilter: 'blur(20px)', boxShadow: isDark ? '0 0 0 1px rgba(59,130,246,0.15),0 24px 48px rgba(0,0,0,0.7)' : '0 24px 48px rgba(0,0,0,0.15)', animation: 'fp-slide-up 0.3s cubic-bezier(0.34,1.56,0.64,1)', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 22, height: 22, borderRadius: 6, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <BookOpen style={{ width: 11, height: 11, color: '#60a5fa' }} />
+    <div className="absolute bottom-6 left-1/2 z-20 w-[480px] max-w-[calc(100vw-48px)] -translate-x-1/2 animate-fade-in overflow-hidden rounded-2xl border border-border bg-popover/95 shadow-xl backdrop-blur-xl">
+      <div className="flex items-center justify-between border-b border-border px-3.5 py-2.5">
+        <div className="flex items-center gap-2">
+          <div className="flex h-[22px] w-[22px] items-center justify-center rounded-md border border-ramp-blue/30 bg-ramp-blue/15">
+            <BookOpen className="h-2.5 w-2.5 text-ramp-blue" />
           </div>
-          <span style={{ fontSize: 11, fontWeight: 600, color: isDark ? '#475569' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {flow.name} · {stepIdx + 1} / {total}
           </span>
         </div>
-        <button onClick={onExit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: isDark ? '#475569' : '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '2px 6px', borderRadius: 4 }}>
-          <X style={{ width: 12, height: 12 }} /> Exit
+        <button onClick={onExit} className="flex items-center gap-1 rounded text-[11px] text-muted-foreground transition-colors hover:text-foreground">
+          <X className="h-3 w-3" /> Exit
         </button>
       </div>
 
-      <div style={{ padding: '14px 16px', maxHeight: 220, overflowY: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 20, background: isDark ? p.bg : p.bgL, border: `1px solid ${isDark ? p.border : p.borderL}`, color: isDark ? p.text : p.textL }}>
+      <div className="max-h-[220px] space-y-2 overflow-y-auto p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            variant="outline"
+            style={{ background: isDark ? p.bg : p.bgL, borderColor: isDark ? p.border : p.borderL, color: isDark ? p.text : p.textL }}
+            className="gap-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em]"
+          >
             {stepIcon(step.type)}
-            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{step.type}</span>
-          </div>
-          {step.is_async && <div style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)', color: '#d8b4fe' }}>async</div>}
-          {step.insight && <div style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', color: isDark ? '#94a3b8' : '#64748b', fontStyle: 'italic' }}>{step.insight}</div>}
+            {step.type}
+          </Badge>
+          {step.is_async && (
+            <span className="rounded-full border border-[#a855f7]/30 bg-[#a855f7]/15 px-2 py-0.5 text-[10px] font-bold text-[#d8b4fe]">async</span>
+          )}
+          {step.insight && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] italic text-muted-foreground">{step.insight}</span>
+          )}
         </div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: isDark ? '#e2e8f0' : '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.35, marginBottom: 8 }}>{step.name}</div>
-        <div style={{ fontSize: 13, color: isDark ? '#94a3b8' : '#475569', lineHeight: 1.65 }}>{step.description}</div>
+        <div className="text-[15px] font-bold leading-[1.35] tracking-[-0.02em] text-foreground">{step.name}</div>
+        <div className="text-[13px] leading-[1.65] text-muted-foreground">{step.description}</div>
         {step.file && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, padding: '6px 10px', borderRadius: 6, background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)', border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)'}` }}>
-            <span style={{ fontSize: 10, color: isDark ? '#64748b' : '#94a3b8' }}>📄</span>
-            <code style={{ fontSize: 11, fontFamily: 'monospace', color: p.dot }}>{step.file}{step.line ? `:${step.line}` : ''}</code>
+          <div className="mt-2.5 flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1.5">
+            <span className="text-[10px]">📄</span>
+            <code className="font-mono text-[11px]" style={{ color: p.dot }}>{step.file}{step.line ? `:${step.line}` : ''}</code>
           </div>
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', maxWidth: 200 }}>
+      <div className="flex items-center justify-between border-t border-border px-3.5 py-2.5">
+        <div className="flex max-w-[200px] flex-wrap items-center gap-1">
           {Array.from({ length: total }).map((_, i) => (
-            <div key={i} style={{ width: i === stepIdx ? 14 : 5, height: 5, borderRadius: 3, background: i === stepIdx ? p.dot : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'), transition: 'all 0.3s cubic-bezier(0.34,1.56,0.64,1)' }} />
+            <div key={i} style={{ background: i === stepIdx ? p.dot : undefined }} className={cn(
+              'h-1.5 rounded-md transition-all duration-300',
+              i === stepIdx ? 'w-3.5' : 'w-1.5 bg-border',
+            )} />
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={onPrev} disabled={stepIdx === 0}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 7, border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'}`, background: isDark ? 'rgba(255,255,255,0.03)' : '#fff', color: stepIdx === 0 ? (isDark ? '#1e293b' : '#e2e8f0') : (isDark ? '#94a3b8' : '#475569'), cursor: stepIdx === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 500 }}>
-            <ChevronLeft style={{ width: 14, height: 14 }} /> Prev
-          </button>
-          <button onClick={stepIdx === total - 1 ? onExit : onNext}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 14px', borderRadius: 7, border: 'none', background: stepIdx === total - 1 ? 'rgba(16,185,129,0.9)' : p.dot, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-            {stepIdx === total - 1 ? 'Done ✓' : <><span>Next</span><ChevronRight style={{ width: 14, height: 14 }} /></>}
-          </button>
+        <div className="flex gap-1.5">
+          <Button variant="outline" size="sm" onClick={onPrev} disabled={stepIdx === 0} className="gap-1">
+            <ChevronLeft className="h-3.5 w-3.5" /> Prev
+          </Button>
+          <Button size="sm" onClick={stepIdx === total - 1 ? onExit : onNext} style={{ background: stepIdx === total - 1 ? 'rgba(16,185,129,0.9)' : p.dot }} className="gap-1 border-none text-white">
+            {stepIdx === total - 1 ? 'Done ✓' : <><span>Next</span><ChevronRight className="h-3.5 w-3.5" /></>}
+          </Button>
         </div>
       </div>
     </div>
@@ -280,38 +294,6 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
     : isDiscovering ? 'Discovering flows…'
     : isSearching ? `Searching for "${searchQuery}"…`
     : 'Generating narrative…';
-
-  const T: Record<string, string> = {
-    bg: isDark ? '#0a0d12' : '#f8fafc',
-    headerBorder: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
-    headerBg: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
-    title: isDark ? '#e2e8f0' : '#0f172a',
-    sub: isDark ? '#475569' : '#64748b',
-    sidebarBg: isDark ? 'rgba(10,13,18,0.98)' : '#ffffff',
-    sidebarBorder: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
-    btnBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)',
-    btnBg: isDark ? 'rgba(255,255,255,0.03)' : '#fff',
-    btnColor: isDark ? '#64748b' : '#94a3b8',
-    dotGrid: isDark ? 'rgba(148,163,184,0.1)' : 'rgba(100,116,139,0.12)',
-    nodeBg: isDark ? 'rgba(15,20,30,0.9)' : 'rgba(255,255,255,0.95)',
-    nodeBorder: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)',
-    nodeText: isDark ? '#94a3b8' : '#475569',
-    nodeSub: isDark ? '#334155' : '#94a3b8',
-    edgeIdle: isDark ? 'rgba(148,163,184,0.1)' : 'rgba(100,116,139,0.18)',
-    flowItemBorder: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)',
-    flowItem: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
-    flowActive: isDark ? 'rgba(59,130,246,0.08)' : 'rgba(59,130,246,0.05)',
-    flowActiveBorder: 'rgba(59,130,246,0.4)',
-    inputBg: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
-    inputBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.12)',
-    empty: isDark ? '#1e293b' : '#cbd5e1',
-  };
-
-  const btnStyle: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    padding: 6, borderRadius: 6, border: `1px solid ${T.btnBorder}`,
-    background: T.btnBg, color: T.btnColor, cursor: 'pointer',
-  };
 
   // ── Activate a flow (set graph + layout to only its nodes) ─────────────────
 
@@ -502,52 +484,54 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ height: '100%', display: 'flex', background: T.bg, fontFamily: "'JetBrains Mono','Fira Code','SF Mono',monospace" }}>
+    <div className="flex h-full font-mono bg-background">
 
       {/* Sidebar */}
-      <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${T.sidebarBorder}`, background: T.sidebarBg, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${T.sidebarBorder}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Workflow style={{ width: 14, height: 14, color: '#60a5fa' }} />
+      <div className="flex w-[280px] shrink-0 flex-col border-r border-border bg-card">
+        <div className="border-b border-border px-4 pb-3 pt-4">
+          <div className="mb-3 flex items-center gap-2.5">
+            <div className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-ramp-blue/30 bg-ramp-blue/15">
+              <Workflow className="h-3.5 w-3.5 text-ramp-blue" />
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: T.title }}>Flows</div>
-              <div style={{ fontSize: 10, color: T.sub }}>AI-discovered execution flows</div>
+              <div className="text-[13px] font-semibold text-foreground">Flows</div>
+              <div className="text-[10px] text-muted-foreground">AI-discovered execution flows</div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input
+          <div className="flex gap-1.5">
+            <Input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !isWorking && handleSearch()}
               placeholder="Ask about a flow…"
               disabled={isWorking || !fullGraph}
-              style={{ flex: 1, height: 32, padding: '0 10px', fontSize: 11, borderRadius: 7, border: `1px solid ${T.inputBorder}`, background: T.inputBg, color: T.title, outline: 'none' }}
+              className="h-8 rounded-lg bg-background px-2.5 text-[11px]"
             />
-            <button onClick={handleSearch} disabled={isWorking || !searchQuery.trim() || !fullGraph}
-              style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', cursor: isWorking || !searchQuery.trim() || !fullGraph ? 'not-allowed' : 'pointer', opacity: isWorking || !searchQuery.trim() || !fullGraph ? 0.5 : 1 }}>
-              {isSearching
-                ? <Loader2 style={{ width: 13, height: 13, animation: 'fp-spin 0.8s linear infinite' }} />
-                : <Search style={{ width: 13, height: 13 }} />}
-            </button>
+            <Button
+              size="icon"
+              onClick={handleSearch}
+              disabled={isWorking || !searchQuery.trim() || !fullGraph}
+              className="h-8 w-8 shrink-0 bg-ramp-blue text-white hover:bg-ramp-blue-dark"
+            >
+              {isSearching ? <Spinner className="h-3 w-3" /> : <Search className="h-3 w-3" />}
+            </Button>
           </div>
-          <div style={{ fontSize: 10, color: T.sub, marginTop: 6, lineHeight: 1.5 }}>
+          <div className="mt-1.5 text-[10px] leading-[1.5] text-muted-foreground">
             AI reads the full graph to find your flow
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+        <div className="flex-1 space-y-1 overflow-y-auto p-2">
           {(isLoadingGraph || isDiscovering) && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '32px 16px', color: T.sub, fontSize: 11 }}>
-              <Loader2 style={{ width: 18, height: 18, animation: 'fp-spin 0.8s linear infinite' }} />
+            <div className="flex flex-col items-center gap-2 p-8 text-[11px] text-muted-foreground">
+              <Spinner className="h-[18px] w-[18px]" />
               {isLoadingGraph ? 'Loading graph…' : 'Discovering flows…'}
             </div>
           )}
 
           {!isLoadingGraph && !isDiscovering && discoveredFlows.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '32px 16px', color: T.empty, fontSize: 11 }}>
+            <div className="p-8 text-center text-[11px] text-muted-foreground">
               No flows discovered yet
             </div>
           )}
@@ -557,12 +541,16 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
             const isLoadingThis = isEnriching && selectedFlowId === summary.id;
             return (
               <button key={summary.id} onClick={() => selectFlow(summary)} disabled={isEnriching}
-                style={{ width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 8, marginBottom: 4, border: `1px solid ${isActive ? T.flowActiveBorder : T.flowItemBorder}`, background: isActive ? T.flowActive : T.flowItem, cursor: isEnriching ? 'not-allowed' : 'pointer', transition: 'all 0.15s', opacity: isEnriching && !isActive ? 0.5 : 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                  {isLoadingThis && <Loader2 style={{ width: 10, height: 10, flexShrink: 0, animation: 'fp-spin 0.8s linear infinite', color: '#60a5fa' }} />}
-                  <div style={{ fontSize: 12, fontWeight: 600, color: T.title, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{summary.name}</div>
+                className={cn(
+                  'w-full rounded-lg border px-3 py-2.5 text-left transition-all',
+                  isActive ? 'border-ramp-blue/40 bg-ramp-blue/10' : 'border-border bg-muted/30 hover:bg-muted',
+                  isEnriching && !isActive ? 'opacity-50' : '',
+                )}>
+                <div className="mb-0.5 flex items-center gap-1.5">
+                  {isLoadingThis && <Spinner className="h-2.5 w-2.5 shrink-0 text-ramp-blue" />}
+                  <div className="truncate text-[12px] font-semibold text-foreground">{summary.name}</div>
                 </div>
-                <div style={{ fontSize: 10, color: T.sub, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                <div className="line-clamp-2 text-[10px] leading-[1.4] text-muted-foreground">
                   {summary.description}
                 </div>
               </button>
@@ -572,13 +560,13 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
       </div>
 
       {/* Main graph */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', borderBottom: `1px solid ${T.headerBorder}`, background: T.headerBg, flexShrink: 0 }}>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/30 px-5 py-2.5">
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: T.title }}>
+            <div className="text-[13px] font-semibold text-foreground">
               {inTourMode && activeFlow ? `Tour · ${activeFlow.steps[tourStepIdx]?.name}` : (activeFlow?.name ?? 'Discovering flows…')}
             </div>
-            <div style={{ fontSize: 11, color: T.sub, marginTop: 1 }}>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">
               {activeFlow
                 ? inTourMode
                   ? `Step ${tourStepIdx + 1} of ${activeFlow.steps.length}`
@@ -587,42 +575,42 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="flex items-center gap-2">
             {activeFlow && !inTourMode && (
               <button onClick={() => { setInTourMode(true); setTourStepIdx(0); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(59,130,246,0.4)', background: 'rgba(59,130,246,0.1)', color: '#60a5fa', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                <Sparkles style={{ width: 13, height: 13 }} /> Guided Tour
+                className="flex items-center gap-1.5 rounded-lg border border-ramp-blue/40 bg-ramp-blue/10 px-3.5 py-1.5 text-[12px] font-semibold text-ramp-blue transition-colors hover:bg-ramp-blue/20">
+                <Sparkles className="h-3.5 w-3.5" /> Guided Tour
               </button>
             )}
             {inTourMode && (
               <button onClick={() => setInTourMode(false)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#f87171', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                <X style={{ width: 13, height: 13 }} /> Exit Tour
+                className="flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-1.5 text-[12px] font-semibold text-destructive transition-colors hover:bg-destructive/20">
+                <X className="h-3.5 w-3.5" /> Exit Tour
               </button>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <button onClick={() => setScale(s => Math.max(0.15, s / 1.25))} style={btnStyle}><ZoomOut style={{ width: 14, height: 14 }} /></button>
-              <span style={{ fontSize: 11, color: T.sub, width: 40, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
-              <button onClick={() => setScale(s => Math.min(3, s * 1.25))} style={btnStyle}><ZoomIn style={{ width: 14, height: 14 }} /></button>
-              <button onClick={() => { setScale(1); setPosition({ x: 0, y: 0 }); positionRef.current = { x: 0, y: 0 }; }} style={btnStyle}><Maximize2 style={{ width: 14, height: 14 }} /></button>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon-sm" onClick={() => setScale(s => Math.max(0.15, s / 1.25))}><ZoomOut className="h-3.5 w-3.5" /></Button>
+              <span className="w-10 text-center text-[11px] text-muted-foreground">{Math.round(scale * 100)}%</span>
+              <Button variant="outline" size="icon-sm" onClick={() => setScale(s => Math.min(3, s * 1.25))}><ZoomIn className="h-3.5 w-3.5" /></Button>
+              <Button variant="outline" size="icon-sm" onClick={() => { setScale(1); setPosition({ x: 0, y: 0 }); positionRef.current = { x: 0, y: 0 }; }}><Maximize2 className="h-3.5 w-3.5" /></Button>
             </div>
           </div>
         </div>
 
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          {isWorking && <LoadingOverlay isDark={isDark} message={loadingMessage} />}
+        <div className="relative flex-1 overflow-hidden">
+          {isWorking && <LoadingOverlay message={loadingMessage} />}
 
           {error && !isWorking && (
-            <div style={{ position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderRadius: 10, background: isDark ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 12 }}>
-              <AlertCircle style={{ width: 14, height: 14, flexShrink: 0 }} />{error}
-              <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', marginLeft: 4 }}><X style={{ width: 12, height: 12 }} /></button>
+            <div className="absolute left-1/2 top-5 z-10 flex animate-fade-in items-center gap-2.5 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12px] text-destructive">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />{error}
+              <button onClick={() => setError(null)} className="ml-1 text-destructive hover:opacity-80"><X className="h-3 w-3" /></button>
             </div>
           )}
 
           {!isWorking && !activeFlow && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: T.empty }}>
-              <Workflow style={{ width: 40, height: 40, opacity: 0.3 }} />
-              <span style={{ fontSize: 13 }}>Select a flow from the sidebar</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <Workflow className="h-10 w-10 opacity-30" />
+              <span className="text-[13px]">Select a flow from the sidebar</span>
             </div>
           )}
 
@@ -633,12 +621,15 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
                 dragStartRef.current = { x: e.clientX - positionRef.current.x, y: e.clientY - positionRef.current.y };
               }}
               onClick={() => setSelectedNode(null)}
-              style={{ width: '100%', height: '100%', cursor: 'grab', userSelect: 'none', position: 'relative' }}>
+              className="relative h-full w-full select-none cursor-grab">
 
-              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: `radial-gradient(circle, ${T.dotGrid} 1px, transparent 1px)`, backgroundSize: '28px 28px', backgroundPosition: `${position.x % 28}px ${position.y % 28}px` }} />
+              <div
+                style={{ backgroundPosition: `${position.x % 28}px ${position.y % 28}px` }}
+                className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle,rgba(148,163,184,0.1)_1px,transparent_1px)] [background-size:28px_28px]"
+              />
 
-              <div style={{ position: 'absolute', inset: 0, transform: `translate(${position.x}px,${position.y}px) scale(${scale})`, transformOrigin: 'center center' }}>
-                <svg style={{ position: 'absolute', inset: 0, width: 6000, height: 4000, overflow: 'visible', pointerEvents: 'none', zIndex: 0 }}>
+              <div style={{ transform: `translate(${position.x}px,${position.y}px) scale(${scale})` }} className="absolute inset-0" >
+                <svg className="pointer-events-none absolute inset-0 z-0 h-[4000px] w-[6000px] overflow-visible">
                   <defs>
                     {Object.entries(PALETTES).map(([type, p]) => (
                       <marker key={type} id={`fpm-${type}`} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
@@ -662,10 +653,12 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
                       <g key={i}>
                         {hi && <path d={curve(sa.x, sa.y, ta.x, ta.y)} fill="none" stroke={p.dot} strokeWidth={10} opacity={0.1} />}
                         <path d={curve(sa.x, sa.y, ta.x, ta.y)} fill="none"
-                          stroke={hi ? p.dot : T.edgeIdle} strokeWidth={hi ? 2 : 1}
+                          stroke={hi ? p.dot : 'rgba(148,163,184,0.18)'}
+                          strokeWidth={hi ? 2 : 1}
                           opacity={dim ? 0.04 : hi ? 1 : 0.7}
                           markerEnd={hi ? `url(#fpm-${src.node_type})` : undefined}
-                          style={{ transition: 'opacity 0.2s, stroke 0.2s' }} />
+                          style={{ transition: 'opacity 0.2s, stroke 0.2s' }}
+                        />
                       </g>
                     );
                   })}
@@ -688,28 +681,25 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
                       style={{
                         position: 'absolute', zIndex: isTour ? 3 : 1,
                         left: node.x, top: node.y, width: node.width, height: node.height,
-                        borderRadius: 10,
-                        background: isFoc || isSel || isTour || isConn ? (isDark ? p.bg : p.bgL) : T.nodeBg,
-                        border: `${isTour ? 2 : 1}px solid ${isFoc || isSel || isTour ? (isDark ? p.border : p.borderL) : isConn ? (isDark ? p.border + '88' : p.borderL) : T.nodeBorder}`,
+                        background: isFoc || isSel || isTour || isConn ? (isDark ? p.bg : p.bgL) : 'hsl(var(--card))',
+                        border: `${isTour ? 2 : 1}px solid ${isFoc || isSel || isTour ? (isDark ? p.border : p.borderL) : isConn ? (isDark ? p.border + '88' : p.borderL) : 'hsl(var(--border))'}`,
                         boxShadow: isTour ? `0 0 0 3px ${p.dot}33, 0 0 32px ${p.glow}` : isFoc || isSel ? `0 0 0 1px ${isDark ? p.border : p.borderL}, 0 0 24px ${p.glow}` : 'none',
                         opacity: isDim ? 0.1 : 1,
-                        cursor: 'pointer',
                         transform: isHov || isSel || isTour ? 'scale(1.05)' : 'scale(1)',
-                        transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
-                        display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                        padding: '0 14px', userSelect: 'none', backdropFilter: 'blur(8px)',
-                      }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: p.dot, boxShadow: isFoc || isSel || isTour ? `0 0 8px ${p.dot}` : 'none' }} />
-                        <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: isFoc || isSel || isTour || isConn ? (isDark ? p.text : p.textL) : T.nodeText }}>
+                      }}
+                      className="flex cursor-pointer flex-col justify-center rounded-xl px-3.5 backdrop-blur-sm transition-all duration-200"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div style={{ background: p.dot, boxShadow: isFoc || isSel || isTour ? `0 0 8px ${p.dot}` : 'none' }} className="h-1.5 w-1.5 shrink-0 rounded-full" />
+                        <span style={{ color: isFoc || isSel || isTour || isConn ? (isDark ? p.text : p.textL) : 'hsl(var(--muted-foreground))' }} className="truncate text-[12px] font-semibold tracking-[-0.01em]">
                           {node.label}
                         </span>
                         {node.is_async && (
-                          <div style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: 'rgba(168,85,247,0.15)', color: '#d8b4fe', border: '1px solid rgba(168,85,247,0.3)', flexShrink: 0, marginLeft: 'auto' }}>async</div>
+                          <span className="ml-auto shrink-0 rounded border border-[#a855f7]/30 bg-[#a855f7]/15 px-1.5 py-px text-[8px] font-bold text-[#d8b4fe]">async</span>
                         )}
                       </div>
                       {filename && (
-                        <div style={{ fontSize: 10, color: T.nodeSub, marginTop: 3, paddingLeft: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div className="mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap pl-[15px] text-[10px] text-muted-foreground/70">
                           {filename}{node.line_start ? `:${node.line_start}` : ''}
                         </div>
                       )}
@@ -719,14 +709,14 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
               </div>
 
               {/* Legend */}
-              <div style={{ position: 'absolute', bottom: 20, left: 20, zIndex: 10, background: isDark ? 'rgba(10,13,18,0.92)' : 'rgba(255,255,255,0.95)', border: `1px solid ${T.sidebarBorder}`, borderRadius: 10, padding: '10px 14px', backdropFilter: 'blur(16px)', pointerEvents: 'none' }}>
-                <div style={{ fontSize: 9, color: T.sub, marginBottom: 7, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Node type</div>
+              <div className="pointer-events-none absolute bottom-5 left-5 z-10 rounded-xl border border-border bg-popover/95 px-3.5 py-2.5 backdrop-blur-xl">
+                <div className="mb-1.5 text-[9px] uppercase tracking-[0.08em] text-muted-foreground">Node type</div>
                 {LEGEND_TYPES.map(({ type, label }) => {
                   const p = getPalette(type);
                   return (
-                    <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: p.dot, boxShadow: `0 0 4px ${p.dot}` }} />
-                      <span style={{ fontSize: 10, color: T.sub }}>{label}</span>
+                    <div key={type} className="mb-1 flex items-center gap-1.5">
+                      <div style={{ background: p.dot, boxShadow: `0 0 4px ${p.dot}` }} className="h-1.5 w-1.5 rounded-full" />
+                      <span className="text-[10px] text-muted-foreground">{label}</span>
                     </div>
                   );
                 })}
@@ -746,13 +736,6 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
           )}
         </div>
       </div>
-
-      <style>{`
-        @keyframes fp-spin     { to { transform: rotate(360deg); } }
-        @keyframes fp-ping     { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(1.5); opacity: 0; } }
-        @keyframes fp-progress { from { width: 0%; } to { width: 100%; } }
-        @keyframes fp-slide-up { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-      `}</style>
     </div>
   );
 }

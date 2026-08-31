@@ -1,5 +1,4 @@
-import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph , DiscoverFlowsResponse} from '@/types';
-
+import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository } from '@/types';
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
@@ -32,7 +31,7 @@ export const api = {
       return res.json();
     },
 
-    getConnectedRepositories: async () => {
+    getConnectedRepositories: async (): Promise<ApiConnectedRepository[]> => {
       const res = await fetch(`${API_BASE}/github/connected-repositories`);
       if (!res.ok) throw new Error('Failed to fetch connected repositories');
       return res.json();
@@ -100,42 +99,99 @@ export const api = {
       if (!res.ok) throw new Error('Failed to generate flow story');
       return res.json();
     },
+
     discoverFlows: async (payload: {
-  repo_id: string;
-  function_nodes: ApiFlowNode[];
-  function_edges: ApiFlowEdge[];
-}): Promise<DiscoverFlowsResponse> => {
-  const res = await fetch(`${API_BASE}/ai/discover-flows`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to discover flows');
-  return res.json();
-},
- 
-enrichFlow: async (payload: {
-  repo_id: string;
-  flow_name: string;
-  function_nodes: ApiFlowNode[];
-  function_edges: ApiFlowEdge[];
-}): Promise<FlowStoryResponse> => {
-  const res = await fetch(`${API_BASE}/ai/enrich-flow`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to enrich flow');
-  return res.json();
-},
- 
- 
+      repo_id: string;
+      function_nodes: ApiFlowNode[];
+      function_edges: ApiFlowEdge[];
+    }): Promise<DiscoverFlowsResponse> => {
+      const res = await fetch(`${API_BASE}/ai/discover-flows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Failed to discover flows');
+      return res.json();
+    },
+
+    enrichFlow: async (payload: {
+      repo_id: string;
+      flow_name: string;
+      function_nodes: ApiFlowNode[];
+      function_edges: ApiFlowEdge[];
+    }): Promise<FlowStoryResponse> => {
+      const res = await fetch(`${API_BASE}/ai/enrich-flow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Failed to enrich flow');
+      return res.json();
+    },
   },
 
   users: {
     getMe: async () => {
       const res = await fetch(`${API_BASE}/users`);
       if (!res.ok) throw new Error('Failed to fetch user');
+      return res.json();
+    },
+
+    login: async (email: string, password: string) => {
+      const res = await fetch(`${API_BASE}/users/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Login failed');
+      }
+      return res.json();
+    },
+
+    signup: async (firstName: string, lastName: string, email: string, password: string) => {
+      const res = await fetch(`${API_BASE}/users/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ first_name: firstName, last_name: lastName, email, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Signup failed');
+      }
+      return res.json();
+    },
+  },
+
+  overview: {
+    getOverview: async (repoId: string, since?: string, until?: string): Promise<ApiOverviewResponse> => {
+      const params = new URLSearchParams();
+      if (since) params.set('since', since);
+      if (until) params.set('until', until);
+      const url = `${API_BASE}/github/${repoId}/overview${params.toString() ? `?${params}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch overview');
+      return res.json();
+    },
+  },
+
+  scan: {
+    getStatus: async (repoId: string) => {
+      const res = await fetch(`${API_BASE}/github/${repoId}/scan-status`);
+      if (!res.ok) throw new Error('Failed to fetch scan status');
+      return res.json();
+    },
+
+    rescan: async (repoId: string) => {
+      const res = await fetch(`${API_BASE}/github/${repoId}/rescan`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to trigger rescan');
+      return res.json();
+    },
+
+    getSyncStatus: async (repoId: string) => {
+      const res = await fetch(`${API_BASE}/github/${repoId}/sync-status`);
+      if (!res.ok) throw new Error('Failed to fetch sync status');
       return res.json();
     },
   },

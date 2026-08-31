@@ -151,7 +151,7 @@ export type ViewState =
   | 'team'
   | 'settings';
 
-  export interface ApiRepository {
+export interface ApiRepository {
   id: number;
   name: string;
   full_name: string;
@@ -164,6 +164,23 @@ export type ViewState =
   language: string | null;
   stargazers_count: number;
   forks_count: number;
+}
+
+
+export interface ApiConnectedRepository {
+  id: string;
+  user_id: string;
+  repo_id: string;
+  owner: string;
+  name: string;
+  full_name: string;
+  clone_url: string | null;
+  default_branch: string;
+  is_private: boolean;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 
@@ -239,5 +256,51 @@ export interface DiscoveredFlowSummary {
  
 export interface DiscoverFlowsResponse {
   flows: DiscoveredFlowSummary[];
+}
+
+export interface ApiOverviewStats {
+  files: number;
+  folders: number;
+  functions: number;
+  dependencies: number;
+}
+
+export interface ApiOverviewCommit {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+  type: 'feat' | 'fix' | 'other';
+}
+
+export interface ApiOverviewResponse {
+  stats: ApiOverviewStats;
+  recent_commits: ApiOverviewCommit[];
+  language: string | null;
+  default_branch: string;
+  description: string | null;
+}
+
+export interface ApiOverviewStats {
+  files: number;
+  folders: number;
+  functions: number;
+  dependencies: number;
+}
+
+export interface ApiOverviewCommit {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+  type: 'feat' | 'fix' | 'other';
+}
+
+export interface ApiOverviewResponse {
+  stats: ApiOverviewStats;
+  recent_commits: ApiOverviewCommit[];
+  language: string | null;
+  default_branch: string;
+  description: string | null;
 }
 

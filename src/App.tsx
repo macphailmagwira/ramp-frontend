@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import type { ViewState, Repository, User, ApiRepository } from '@/types';
+import type { ViewState, Repository, User, ApiRepository, ApiConnectedRepository } from '@/types';
 import { mockTeamMembers } from '@/data/mock';
 import { api } from '@/lib/api';
 
@@ -41,81 +41,131 @@ const toRepository = (r: ApiRepository): Repository => ({
   analysisProgress: 0,
 });
 
+const toConnectedRepository = (r: ApiConnectedRepository): Repository => ({
+  id: r.id,
+  name: r.name,
+  fullName: r.full_name,
+  description: r.description || '',
+  language: 'Unknown',
+  stars: 0,
+  forks: 0,
+  updatedAt: r.updated_at || '',
+  isConnected: true,
+  isAnalyzing: false,
+  analysisProgress: 0,
+});
+
+const toUser = (apiUser: any): User => ({
+  id: String(apiUser.id),
+  name: `${apiUser.first_name} ${apiUser.last_name}`.trim(),
+  email: apiUser.email,
+  avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiUser.email}`,
+  role: 'owner' as const,
+});
+
 function AppContent() {
   const [view, setView] = useState<ViewState>('login');
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null);
   const [connectedRepoId, setConnectedRepoId] = useState<string | null>(null);
   const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [connectedRepositories, setConnectedRepositories] = useState<Repository[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
+
+  const loadConnectedRepositories = useCallback(async () => {
+    try {
+      const data = await api.github.getConnectedRepositories();
+      const mapped = data.map(toConnectedRepository);
+      setConnectedRepositories(mapped);
+      return mapped;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const loadRepositories = useCallback(async () => {
+    setIsLoadingRepos(true);
+    try {
+      const data = await api.github.getRepositories();
+      setRepositories(data.repositories.map(toRepository));
+    } catch (err) {
+      console.error('Failed to load repositories:', err);
+    } finally {
+      setIsLoadingRepos(false);
+    }
+  }, []);
+
+  const navigateToDashboard = useCallback(async (currentUser: User) => {
+    setUser(currentUser);
+    try {
+      const conns = await loadConnectedRepositories();
+      if (conns.length > 0) {
+        const savedRepoId = localStorage.getItem('ramp_connected_repo_id');
+        const active = savedRepoId
+          ? conns.find(r => r.id === savedRepoId)
+          : conns[0];
+        if (active) {
+          setSelectedRepository(active);
+          setConnectedRepoId(active.id);
+          setView('overview');
+        } else {
+          setView('repository-select');
+        }
+      } else {
+        setView('repository-select');
+      }
+    } finally {
+      setIsAuthenticating(false);
+    }
+    loadRepositories();
+  }, [loadConnectedRepositories, loadRepositories]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('github') === 'connected') {
       const savedUser = localStorage.getItem('ramp_user');
-      if (savedUser) setUser(JSON.parse(savedUser));
+      if (savedUser) {
+        const u = JSON.parse(savedUser);
+        navigateToDashboard(u);
+      }
       window.history.replaceState({}, '', '/');
-      loadRepositories();
     } else {
       const savedUser = localStorage.getItem('ramp_user');
       if (savedUser) {
-        setUser(JSON.parse(savedUser));
-        // Restore connectedRepoId if saved
+        const u = JSON.parse(savedUser);
+        setUser(u);
         const savedRepoId = localStorage.getItem('ramp_connected_repo_id');
         if (savedRepoId) setConnectedRepoId(savedRepoId);
-        setView('repository-select');
-        loadRepositories();
+        navigateToDashboard(u);
+      } else {
+        setIsAuthenticating(false);
       }
     }
-  }, []);
+  }, [navigateToDashboard]);
 
-  const loadRepositories = async () => {
-    setIsLoadingRepos(true);
-    try {
-      const data = await api.github.getRepositories();
-      setRepositories(data.repositories.map(toRepository));
-      setView('repository-select');
-    } catch (err) {
-      console.error('Failed to load repositories:', err);
-      setView('repository-select');
-    } finally {
-      setIsLoadingRepos(false);
-    }
+  const handleLogin = async (apiUser: any, _token: string) => {
+    const u = toUser(apiUser);
+    localStorage.setItem('ramp_user', JSON.stringify(u));
+    navigateToDashboard(u);
   };
 
-  const handleLogin = (email: string, _password: string) => {
-    const newUser: User = {
-      id: '1',
-      name: 'Dev User',
-      email: email,
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dev',
-      role: 'owner',
-    };
-    setUser(newUser);
-    localStorage.setItem('ramp_user', JSON.stringify(newUser));
-    window.location.href = api.github.getLoginUrl();
-  };
-
-  const handleSignup = (name: string, email: string, _password: string) => {
-    const newUser: User = {
-      id: '1',
-      name: name,
-      email: email,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
-      role: 'owner',
-    };
-    setUser(newUser);
-    localStorage.setItem('ramp_user', JSON.stringify(newUser));
-    window.location.href = api.github.getLoginUrl();
+  const handleSignup = async (apiUser: any, _token: string) => {
+    const u = toUser(apiUser);
+    localStorage.setItem('ramp_user', JSON.stringify(u));
+    navigateToDashboard(u);
   };
 
   const handleLogout = () => {
     setUser(null);
     setRepositories([]);
+    setConnectedRepositories([]);
     setConnectedRepoId(null);
+    setSelectedRepository(null);
     localStorage.removeItem('ramp_user');
     localStorage.removeItem('ramp_connected_repo_id');
+    localStorage.removeItem('ramp_token');
     setView('login');
   };
 
@@ -135,19 +185,50 @@ function AppContent() {
         stargazers_count: repo.stars,
         forks_count: repo.forks,
       });
-      // Store the connected repo UUID for architecture and other features
       setConnectedRepoId(response.id);
       localStorage.setItem('ramp_connected_repo_id', response.id);
+      setSelectedRepository(repo);
+      await loadConnectedRepositories();
+      setView('repository-analysis');
     } catch (err) {
       console.error('Failed to connect repository:', err);
     }
+  };
 
+  const handleSwitchRepository = (repo: Repository) => {
     setSelectedRepository(repo);
-    setView('repository-analysis');
-    setTimeout(() => setView('overview'), 4000);
+    setConnectedRepoId(repo.id);
+    localStorage.setItem('ramp_connected_repo_id', repo.id);
+    setView('overview');
+  };
+
+  const handleAddRepository = () => {
+    loadRepositories();
+    setView('repository-select');
+  };
+
+  const handleRescan = async () => {
+    if (!connectedRepoId) return;
+    try {
+      await api.scan.rescan(connectedRepoId);
+      setView('repository-analysis');
+    } catch (err) {
+      console.error('Failed to rescan:', err);
+    }
   };
 
   const handleNavigate = (newView: ViewState) => setView(newView);
+
+  if (isAuthenticating) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 border-2 border-ramp-blue/30 border-t-ramp-blue rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (view === 'login') {
     return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
@@ -161,7 +242,21 @@ function AppContent() {
     return (
       <RepositorySelectPage
         repositories={repositories}
+        connectedRepositories={connectedRepositories}
         onSelectRepository={handleSelectRepository}
+        onSwitchToConnected={handleSwitchRepository}
+        onBack={() => {
+          if (connectedRepositories.length > 0) {
+            const savedRepoId = localStorage.getItem('ramp_connected_repo_id');
+            const active = savedRepoId
+              ? connectedRepositories.find(r => r.id === savedRepoId)
+              : connectedRepositories[0];
+            const repo = active || connectedRepositories[0];
+            setSelectedRepository(repo);
+            setConnectedRepoId(repo.id);
+            setView('overview');
+          }
+        }}
         user={user}
         onLogout={handleLogout}
         isLoading={isLoadingRepos}
@@ -173,6 +268,7 @@ function AppContent() {
     return (
       <RepositoryAnalysisPage
         repository={selectedRepository}
+        repoId={connectedRepoId || ''}
         onComplete={() => setView('overview')}
       />
     );
@@ -181,13 +277,13 @@ function AppContent() {
   const renderDashboardContent = () => {
     switch (view) {
       case 'overview':
-        return <OverviewPage repository={selectedRepository || repositories[0]} />;
+        return <OverviewPage repository={selectedRepository || connectedRepositories[0]} repoId={connectedRepoId} onRescan={handleRescan} />;
       case 'architecture':
         return <ArchitecturePage repoId={connectedRepoId} />;
       case 'flows':
         return <FlowsPage />;
       case 'storybook':
-        return <StorybookPage />;
+        return <StorybookPage repoId={connectedRepoId} />;
      case 'ask-ramp':
         return <AskRampPage />;
       case 'team':
@@ -195,7 +291,7 @@ function AppContent() {
       case 'settings':
         return <SettingsPage user={user} onLogout={handleLogout} />;
       default:
-        return <OverviewPage repository={selectedRepository || repositories[0]} />;
+        return <OverviewPage repository={selectedRepository || connectedRepositories[0]} repoId={connectedRepoId} onRescan={handleRescan} />;
     }
   };
 
@@ -207,6 +303,9 @@ function AppContent() {
         isOpen={isSidebarOpen}
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
         repository={selectedRepository}
+        repositories={connectedRepositories}
+        onSelectRepository={handleSwitchRepository}
+        onAddRepository={handleAddRepository}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar

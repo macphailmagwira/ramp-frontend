@@ -30,11 +30,16 @@ import {
   ChevronRight,
   Zap,
   Github,
+  ArrowLeft,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface RepositorySelectPageProps {
   repositories: Repository[];
+  connectedRepositories: Repository[];
   onSelectRepository: (repo: Repository) => void;
+  onSwitchToConnected: (repo: Repository) => void;
+  onBack: () => void;
   user: User | null;
   onLogout: () => void;
   isLoading?: boolean;
@@ -42,7 +47,10 @@ interface RepositorySelectPageProps {
 
 export function RepositorySelectPage({
   repositories,
+  connectedRepositories,
   onSelectRepository,
+  onSwitchToConnected,
+  onBack,
   user,
   onLogout,
   isLoading = false,
@@ -51,10 +59,13 @@ export function RepositorySelectPage({
   const [selectedRepos, setSelectedRepos] = useState<Set<string>>(new Set());
   const { setTheme, resolvedTheme } = useTheme();
 
+  const connectedIds = useMemo(() => new Set(connectedRepositories.map(r => r.id)), [connectedRepositories]);
+
   const filteredRepos = useMemo(() => {
     return repositories.filter(
       (repo) =>
         repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        repo.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (repo.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (repo.language || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
@@ -86,22 +97,25 @@ export function RepositorySelectPage({
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
-      <header className="flex items-center justify-between h-16 px-6 border-b border-border">
+      <header className="flex items-center justify-between h-14 px-6 border-b border-border/70 bg-background/80 backdrop-blur-md sticky top-0 z-30">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-ramp-blue">
-            <Zap className="h-5 w-5 text-white" />
+          <Button variant="ghost" size="icon" onClick={onBack} className="mr-1 h-9 w-9 text-muted-foreground hover:text-foreground rounded-lg">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-ramp-blue to-ramp-blue-light shadow-glow-sm">
+            <Zap className="h-4 w-4 text-white" strokeWidth={2.25} />
           </div>
           <span className="font-heading font-bold text-lg tracking-tight">Ramp</span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground rounded-lg">
                 {resolvedTheme === 'dark' ? (
-                  <Moon className="h-5 w-5" />
+                  <Moon className="h-4 w-4" />
                 ) : (
-                  <Sun className="h-5 w-5" />
+                  <Sun className="h-4 w-4" />
                 )}
               </Button>
             </DropdownMenuTrigger>
@@ -120,16 +134,23 @@ export function RepositorySelectPage({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <div className="w-px h-5 bg-border/70 mx-1.5" />
+
           {user && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="gap-2">
-                  <img src={user.avatar} alt={user.name} className="h-6 w-6 rounded-full" />
-                  <span className="hidden sm:inline text-sm">{user.name}</span>
+                <Button variant="ghost" className="h-9 gap-2 pl-1.5 pr-2 rounded-lg hover:bg-muted/60">
+                  <img src={user.avatar} alt={user.name} className="h-6 w-6 rounded-full ring-1 ring-border/60" />
+                  <span className="hidden sm:inline text-[13px] font-medium">{user.name}</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium">{user.name}</p>
+                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                  </div>
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem>
                   <UserIcon className="mr-2 h-4 w-4" /> Profile
@@ -148,168 +169,206 @@ export function RepositorySelectPage({
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center justify-center p-6">
-        <div className="w-full max-w-4xl">
+      <main className="flex-1 flex flex-col items-center p-6 overflow-auto">
+        <div className="w-full max-w-4xl animate-fade-in">
           {/* Title */}
-          <div className="text-center mb-8">
-            <h1 className="font-heading text-3xl font-bold mb-2">
+          <div className="text-center mb-10">
+            <h1 className="font-heading text-3xl font-bold mb-2 tracking-tight">
               Select a repository
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground text-[15px]">
               Choose a repository to analyze and generate documentation
             </p>
           </div>
 
-          {/* Search and filters */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search repositories..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => {
-                window.location.href = 'http://localhost:8000/api/v1/github/oauth/login';
-              }}
-            >
-              <Github className="h-4 w-4" />
-              <span className="hidden sm:inline">Connect GitHub</span>
-            </Button>
-          </div>
-
-          {/* Repository list */}
-          <div className="border border-border rounded-xl overflow-hidden bg-card">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/50">
-              <span className="text-sm font-medium">
-                {isLoading ? 'Loading...' : `${filteredRepos.length} repositories`}
-              </span>
-              {selectedRepos.size > 0 && (
-                <Badge variant="secondary" className="bg-ramp-blue/10 text-ramp-blue">
-                  {selectedRepos.size} selected
-                </Badge>
-              )}
-            </div>
-
-            <ScrollArea className="h-[400px]">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-full py-20">
-                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                    <div className="w-6 h-6 border-2 border-ramp-blue border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm">Loading repositories...</span>
-                  </div>
-                </div>
-              ) : filteredRepos.length === 0 ? (
-                <div className="flex items-center justify-center h-full py-20">
-                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                    <Github className="h-8 w-8" />
-                    <span className="text-sm">No repositories found</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 mt-2"
-                      onClick={() => {
-                        window.location.href = 'http://localhost:8000/api/v1/github/oauth/login';
-                      }}
-                    >
-                      <Github className="h-4 w-4" />
-                      Connect GitHub
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="divide-y divide-border">
-                  {filteredRepos.map((repo) => (
+          {/* Connected Repositories */}
+          {connectedRepositories.length > 0 && (
+            <div className="mb-8">
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.08em]">
+                  Connected Repositories
+                </h2>
+              </div>
+              <div className="border border-border/70 rounded-xl overflow-hidden bg-card shadow-xs">
+                <div className="divide-y divide-border/60">
+                  {connectedRepositories.map((repo) => (
                     <div
                       key={repo.id}
-                      className={cn(
-                        'flex items-center gap-4 p-4 cursor-pointer transition-colors',
-                        'hover:bg-muted/50',
-                        selectedRepos.has(repo.id) && 'bg-ramp-blue/5'
-                      )}
-                      onClick={() => toggleRepo(repo.id)}
+                      className="group flex items-center gap-4 px-4 py-3.5 cursor-pointer transition-colors hover:bg-muted/40"
+                      onClick={() => onSwitchToConnected(repo)}
                     >
-                      {/* Checkbox */}
-                      <div
-                        className={cn(
-                          'flex items-center justify-center w-5 h-5 rounded border-2 transition-colors',
-                          selectedRepos.has(repo.id)
-                            ? 'bg-ramp-blue border-ramp-blue'
-                            : 'border-muted-foreground/30'
-                        )}
-                      >
-                        {selectedRepos.has(repo.id) && (
-                          <Check className="h-3.5 w-3.5 text-white" />
-                        )}
+                      <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                        <Check className="h-4 w-4 text-emerald-500" />
                       </div>
-
-                      {/* Repo info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <GitBranch className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium truncate">{repo.fullName}</span>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-medium text-[14px] truncate">{repo.name}</span>
                         </div>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {repo.description || 'No description'}
+                        <p className="text-xs text-muted-foreground truncate font-mono">
+                          {repo.fullName}
                         </p>
                       </div>
-
-                      {/* Stats */}
-                      <div className="hidden sm:flex items-center gap-4 text-sm text-muted-foreground">
-                        {repo.language && (
-                          <div className="flex items-center gap-1">
-                            <span
-                              className="w-2 h-2 rounded-full"
-                              style={{
-                                backgroundColor:
-                                  repo.language === 'TypeScript'
-                                    ? '#3178c6'
-                                    : repo.language === 'Python'
-                                    ? '#3776ab'
-                                    : repo.language === 'Go'
-                                    ? '#00add8'
-                                    : repo.language === 'Rust'
-                                    ? '#dea584'
-                                    : '#6b7280',
-                              }}
-                            />
-                            <span>{repo.language}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1">
-                          <Star className="h-3.5 w-3.5" />
-                          <span>{repo.stars}</span>
-                        </div>
-                        {repo.updatedAt && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" />
-                            <span>{formatDate(repo.updatedAt)}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Arrow */}
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground group-hover:translate-x-0.5 transition-all" />
                     </div>
                   ))}
                 </div>
-              )}
-            </ScrollArea>
+              </div>
+            </div>
+          )}
+
+          {/* Available Repositories */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Github className="h-3.5 w-3.5 text-muted-foreground" />
+              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.08em]">
+                Available Repositories
+              </h2>
+            </div>
+
+            {/* Search */}
+            <div className="flex items-center gap-4 mb-4">
+              <div className="relative flex-1 group">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 group-focus-within:text-ramp-blue transition-colors" />
+                <Input
+                  placeholder="Search repositories..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 h-10 rounded-lg bg-muted/30 border-border/70 hover:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ramp-blue/40 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Repository list */}
+            <div className="border border-border/70 rounded-xl overflow-hidden bg-card shadow-xs">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/60 bg-muted/30">
+                <span className="text-[13px] font-medium text-muted-foreground">
+                  {isLoading ? 'Loading...' : `${filteredRepos.length} repositories`}
+                </span>
+                {selectedRepos.size > 0 && (
+                  <Badge variant="secondary" className="bg-ramp-blue/10 text-ramp-blue border border-ramp-blue/20 font-medium">
+                    {selectedRepos.size} selected
+                  </Badge>
+                )}
+              </div>
+
+              <ScrollArea className="h-[320px]">
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-full py-20">
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <div className="w-6 h-6 border-2 border-ramp-blue/30 border-t-ramp-blue rounded-full animate-spin" />
+                      <span className="text-sm">Loading repositories...</span>
+                    </div>
+                  </div>
+                ) : filteredRepos.length === 0 ? (
+                  <div className="flex items-center justify-center h-full py-20">
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center">
+                        <Github className="h-6 w-6 text-muted-foreground/60" />
+                      </div>
+                      <span className="text-sm">No repositories found</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/60">
+                    {filteredRepos.map((repo) => {
+                      const isAlreadyConnected = connectedIds.has(repo.id);
+                      const isSelected = selectedRepos.has(repo.id);
+                      return (
+                        <div
+                          key={repo.id}
+                          className={cn(
+                            'group flex items-center gap-4 px-4 py-3.5 transition-colors',
+                            !isAlreadyConnected && 'cursor-pointer hover:bg-muted/40',
+                            isSelected && 'bg-ramp-blue/[0.06] hover:bg-ramp-blue/[0.08]'
+                          )}
+                          onClick={() => !isAlreadyConnected && toggleRepo(repo.id)}
+                        >
+                          {/* Checkbox */}
+                          {!isAlreadyConnected && (
+                            <div
+                              className={cn(
+                                'flex items-center justify-center w-5 h-5 rounded-md border-[1.5px] transition-all duration-150',
+                                isSelected
+                                  ? 'bg-ramp-blue border-ramp-blue shadow-[0_0_0_3px_rgba(79,109,255,0.15)]'
+                                  : 'border-muted-foreground/30 group-hover:border-muted-foreground/50'
+                              )}
+                            >
+                              {isSelected && (
+                                <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                              )}
+                            </div>
+                          )}
+
+                          {/* Repo info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <GitBranch className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
+                              <span className="font-medium text-[14px] truncate">{repo.name}</span>
+                              {isAlreadyConnected && (
+                                <Badge variant="secondary" className="text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-medium">
+                                  Connected
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-[13px] text-muted-foreground truncate">
+                              {repo.description || repo.fullName}
+                            </p>
+                          </div>
+
+                          {/* Stats */}
+                          <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground">
+                            {repo.language && repo.language !== 'Unknown' && (
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="w-2 h-2 rounded-full"
+                                  style={{
+                                    backgroundColor:
+                                      repo.language === 'TypeScript'
+                                        ? '#3178c6'
+                                        : repo.language === 'Python'
+                                        ? '#3776ab'
+                                        : repo.language === 'Go'
+                                        ? '#00add8'
+                                        : repo.language === 'Rust'
+                                        ? '#dea584'
+                                        : '#6b7280',
+                                  }}
+                                />
+                                <span>{repo.language}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <Star className="h-3 w-3" />
+                              <span className="font-variant-numeric tabular-nums">{repo.stars}</span>
+                            </div>
+                            {repo.updatedAt && (
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                <span>{formatDate(repo.updatedAt)}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Arrow */}
+                          <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground group-hover:translate-x-0.5 transition-all" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
           </div>
 
           {/* Actions */}
           <div className="flex items-center justify-between mt-6">
-            <Button variant="ghost" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add repository manually
+            <Button variant="ghost" className="gap-2 text-muted-foreground hover:text-foreground" onClick={onBack}>
+              <ArrowLeft className="h-4 w-4" />
+              Cancel
             </Button>
             <Button
-              className="gap-2 bg-ramp-blue hover:bg-ramp-blue-dark text-white"
+              className="gap-2 bg-ramp-blue hover:bg-ramp-blue-dark text-white font-medium rounded-lg shadow-sm hover:shadow-glow-sm transition-all duration-200 px-5"
               disabled={selectedRepos.size === 0 || isLoading}
               onClick={handleContinue}
             >
