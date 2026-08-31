@@ -3,14 +3,11 @@ import type { User } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
 import {
-  User as UserIcon,
-  Bell,
   Github,
   Trash2,
   Save,
@@ -24,7 +21,7 @@ import {
 
 interface SettingsPageProps {
   user: User | null;
-  onLogout: () => void;
+  onLogout?: () => void;
 }
 
 // ── Reusable section wrapper ──────────────────────────────────────────────────
@@ -131,7 +128,7 @@ function UserAvatar({ user }: { user: User | null }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export function SettingsPage({ user, onLogout }: SettingsPageProps) {
+export function SettingsPage({ user }: SettingsPageProps) {
   const { theme, setTheme } = useTheme();
 
   const [notifications, setNotifications] = useState({

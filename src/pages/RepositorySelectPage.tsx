@@ -20,7 +20,6 @@ import {
   Star,
   Clock,
   Check,
-  Plus,
   LogOut,
   Settings,
   User as UserIcon,

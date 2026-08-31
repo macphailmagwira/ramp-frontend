@@ -143,10 +143,13 @@ export type ViewState =
   | 'repository-analysis'
   | 'github-callback'
   | 'dashboard'
+  | 'inbox'
   | 'overview'
   | 'architecture'
   | 'storybook'
   | 'flows'
+  | 'meetings'
+  | 'chat'
   | 'ask-ramp'
   | 'team'
   | 'settings';

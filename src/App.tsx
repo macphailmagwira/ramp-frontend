@@ -5,7 +5,7 @@ import { mockTeamMembers } from '@/data/mock';
 import { api } from '@/lib/api';
 
 // Layout Components
-import { Sidebar } from '@/components/layout/Sidebar';
+import { Sidebar, type KnowledgeCategory } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 
 // Auth Pages
@@ -73,6 +73,34 @@ function AppContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
+  const [knowledgeCategories, setKnowledgeCategories] = useState<KnowledgeCategory[]>(() => [
+    {
+      id: 'getting-started',
+      label: 'Getting started',
+      docs: [
+        { id: 'setup-guide', label: 'Setup guide' },
+        { id: 'onboarding', label: 'Onboarding' },
+      ],
+    },
+    {
+      id: 'architecture',
+      label: 'Architecture',
+      docs: [
+        { id: 'system-overview', label: 'System overview' },
+        { id: 'data-flow', label: 'Data flow' },
+        { id: 'api-contracts', label: 'API contracts' },
+      ],
+    },
+    {
+      id: 'runbooks',
+      label: 'Runbooks',
+      docs: [
+        { id: 'deploy', label: 'Deploy' },
+        { id: 'rollback', label: 'Rollback' },
+      ],
+    },
+  ]);
+  const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
 
   const loadConnectedRepositories = useCallback(async () => {
     try {
@@ -219,6 +247,23 @@ function AppContent() {
 
   const handleNavigate = (newView: ViewState) => setView(newView);
 
+  const handleCreateCategory = (label: string) => {
+    setKnowledgeCategories(prev => [
+      ...prev,
+      { id: crypto.randomUUID(), label, docs: [] },
+    ]);
+  };
+
+  const handleCreateDoc = (categoryId: string, label: string) => {
+    setKnowledgeCategories(prev =>
+      prev.map(c =>
+        c.id === categoryId
+          ? { ...c, docs: [...c.docs, { id: crypto.randomUUID(), label }] }
+          : c
+      )
+    );
+  };
+
   if (isAuthenticating) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -306,11 +351,16 @@ function AppContent() {
         repositories={connectedRepositories}
         onSelectRepository={handleSwitchRepository}
         onAddRepository={handleAddRepository}
+        user={user}
+        onLogout={handleLogout}
+        knowledgeCategories={knowledgeCategories}
+        activeDocId={activeDocId}
+        onSelectDoc={setActiveDocId}
+        onCreateCategory={handleCreateCategory}
+        onCreateDoc={handleCreateDoc}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar
-          user={user}
-          onLogout={handleLogout}
           onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)}
           isSidebarOpen={isSidebarOpen}
         />

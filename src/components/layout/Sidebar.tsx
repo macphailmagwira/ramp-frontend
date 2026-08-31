@@ -20,7 +20,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -56,6 +55,12 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 
+// ─── Shared focus-reset — every interactive control in this file uses this
+// instead of relying on browser/Radix defaults, which can still show a ring
+// on plain `focus` (not just `focus-visible`) or via ring-offset. ──────────
+const noFocusRing =
+  'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0';
+
 // ─── Knowledge data shape ─────────────────────────────────────────────────────
 // Docs are grouped into categories, e.g. { id: 'getting-started', label: 'Getting started',
 // docs: [{ id: 'setup', label: 'Setup guide' }, ...] }
@@ -85,6 +90,8 @@ interface SidebarProps {
   knowledgeCategories?: KnowledgeCategory[];
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
+  onCreateCategory?: (label: string) => void;
+  onCreateDoc?: (categoryId: string, label: string) => void;
 }
 
 interface NavItem {
@@ -132,6 +139,7 @@ function Row({
       aria-current={isActive ? 'page' : undefined}
       className={cn(
         'group flex h-[30px] w-full items-center gap-2 rounded-md text-sm transition-colors',
+        noFocusRing,
         isOpen ? 'px-2' : 'justify-center px-0',
         indent && isOpen && 'pl-7',
         isActive
@@ -180,7 +188,10 @@ function SectionHeader({
   return (
     <button
       onClick={onToggle}
-      className="group flex h-6 w-full items-center gap-1 rounded px-2 text-xs font-medium text-foreground/40 hover:text-foreground/65"
+      className={cn(
+        'group flex h-6 w-full items-center gap-1 rounded px-2 text-xs font-medium text-foreground/40 hover:text-foreground/65',
+        noFocusRing
+      )}
     >
       <span>{label}</span>
       <ChevronRight
@@ -193,6 +204,53 @@ function SectionHeader({
   );
 }
 
+// ─── Inline create input — commits on Enter/blur, cancels on Escape ──────────
+
+function NewItemInput({
+  icon: Icon,
+  placeholder,
+  indent = false,
+  onSubmit,
+  onCancel,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  placeholder: string;
+  indent?: boolean;
+  onSubmit: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState('');
+
+  return (
+    <div
+      className={cn(
+        'flex h-[26px] items-center gap-1.5 rounded-md px-2',
+        indent && 'pl-7'
+      )}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
+      <input
+        autoFocus
+        value={value}
+        placeholder={placeholder}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            onSubmit(value);
+          } else if (e.key === 'Escape') {
+            onCancel();
+          }
+        }}
+        onBlur={() => (value.trim() ? onSubmit(value) : onCancel())}
+        className={cn(
+          'w-full min-w-0 bg-transparent text-[13px] text-foreground/85 placeholder:text-foreground/35',
+          noFocusRing
+        )}
+      />
+    </div>
+  );
+}
+
 // ─── Knowledge section — categories of docs, each independently collapsible ──
 
 function KnowledgeSection({
@@ -202,6 +260,8 @@ function KnowledgeSection({
   onToggleSection,
   activeDocId,
   onSelectDoc,
+  onCreateCategory,
+  onCreateDoc,
 }: {
   categories: KnowledgeCategory[];
   isOpen: boolean;
@@ -209,10 +269,14 @@ function KnowledgeSection({
   onToggleSection: () => void;
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
+  onCreateCategory?: (label: string) => void;
+  onCreateDoc?: (categoryId: string, label: string) => void;
 }) {
   const [openCategories, setOpenCategories] = useState<Set<string>>(
     () => new Set(categories.map(c => c.id))
   );
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [creatingDocFor, setCreatingDocFor] = useState<string | null>(null);
 
   const toggleCategory = (id: string) => {
     setOpenCategories(prev => {
@@ -226,52 +290,132 @@ function KnowledgeSection({
     });
   };
 
-  if (categories.length === 0) return null;
+  const createCategory = (label: string) => {
+    if (label.trim()) onCreateCategory?.(label.trim());
+    setCreatingCategory(false);
+  };
+
+  const createDoc = (categoryId: string, label: string) => {
+    if (label.trim()) onCreateDoc?.(categoryId, label.trim());
+    setCreatingDocFor(null);
+  };
+
+  // Collapsed sidebar mini-mode: only render something if there are docs to show
+  if (!isOpen && categories.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-0.5">
       {isOpen && (
-        <SectionHeader
-          label="Knowledge"
-          collapsed={sectionCollapsed}
-          onToggle={onToggleSection}
-        />
+        <div className="group flex h-6 w-full items-center gap-1 rounded">
+          <button
+            onClick={onToggleSection}
+            className={cn(
+              'flex h-6 flex-1 items-center gap-1 rounded px-2 text-xs font-medium text-foreground/40 hover:text-foreground/65',
+              noFocusRing
+            )}
+          >
+            <span>Knowledge</span>
+            <ChevronRight
+              className={cn(
+                'h-3 w-3 shrink-0 opacity-0 transition-transform group-hover:opacity-100',
+                !sectionCollapsed && 'rotate-90'
+              )}
+            />
+          </button>
+          {onCreateCategory && (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                setCreatingCategory(true);
+              }}
+              aria-label="New category"
+              className={cn(
+                'mr-1 flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/[0.07] group-hover:opacity-100',
+                noFocusRing
+              )}
+            >
+              <Plus className="h-3 w-3 text-foreground/45" />
+            </button>
+          )}
+        </div>
       )}
+
       {(!sectionCollapsed || !isOpen) &&
         categories.map(category => {
           const catOpen = openCategories.has(category.id);
           return (
-            <div key={category.id}>
+            <div key={category.id} className="group/cat">
               {isOpen && (
-                <button
-                  onClick={() => toggleCategory(category.id)}
-                  className="group flex h-[26px] w-full items-center gap-1.5 rounded-md px-2 text-[13px] text-foreground/65 hover:bg-foreground/[0.045] hover:text-foreground/85"
-                >
-                  <ChevronRight
+                <div className="group flex h-[26px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]">
+                  <button
+                    onClick={() => toggleCategory(category.id)}
                     className={cn(
-                      'h-3 w-3 shrink-0 text-foreground/40 transition-transform',
-                      catOpen && 'rotate-90'
+                      'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md pl-2 text-[13px] text-foreground/65 hover:text-foreground/85',
+                      noFocusRing
                     )}
-                  />
-                  <Folder className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
-                  <span className="flex-1 truncate text-left">{category.label}</span>
-                </button>
+                  >
+                    <ChevronRight
+                      className={cn(
+                        'h-3 w-3 shrink-0 text-foreground/40 transition-transform',
+                        catOpen && 'rotate-90'
+                      )}
+                    />
+                    <Folder className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
+                    <span className="flex-1 truncate text-left">{category.label}</span>
+                  </button>
+                  {onCreateDoc && (
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setCreatingDocFor(category.id);
+                        setOpenCategories(prev => new Set(prev).add(category.id));
+                      }}
+                      aria-label={`New document in ${category.label}`}
+                      className={cn(
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/[0.07] group-hover:opacity-100',
+                        noFocusRing
+                      )}
+                    >
+                      <Plus className="h-3 w-3 text-foreground/45" />
+                    </button>
+                  )}
+                </div>
               )}
-              {(catOpen || !isOpen) &&
-                category.docs.map(doc => (
-                  <Row
-                    key={doc.id}
-                    icon={FileText}
-                    label={doc.label}
-                    isActive={activeDocId === doc.id}
-                    isOpen={isOpen}
-                    indent={isOpen}
-                    onClick={() => onSelectDoc?.(doc.id)}
-                  />
-                ))}
+              {(catOpen || !isOpen) && (
+                <>
+                  {category.docs.map(doc => (
+                    <Row
+                      key={doc.id}
+                      icon={FileText}
+                      label={doc.label}
+                      isActive={activeDocId === doc.id}
+                      isOpen={isOpen}
+                      indent={isOpen}
+                      onClick={() => onSelectDoc?.(doc.id)}
+                    />
+                  ))}
+                  {isOpen && creatingDocFor === category.id && (
+                    <NewItemInput
+                      icon={FileText}
+                      indent
+                      placeholder="New document"
+                      onSubmit={label => createDoc(category.id, label)}
+                      onCancel={() => setCreatingDocFor(null)}
+                    />
+                  )}
+                </>
+              )}
             </div>
           );
         })}
+      {isOpen && creatingCategory && (
+        <NewItemInput
+          icon={Folder}
+          placeholder="New category"
+          onSubmit={createCategory}
+          onCancel={() => setCreatingCategory(false)}
+        />
+      )}
     </div>
   );
 }
@@ -297,6 +441,7 @@ function RepoSwitcher({
     <button
       className={cn(
         'flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-foreground/[0.045]',
+        noFocusRing,
         !sidebarOpen && 'w-8 justify-center px-0'
       )}
       aria-expanded={open}
@@ -331,11 +476,11 @@ function RepoSwitcher({
         <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       )}
 
-      <PopoverContent align="start" className="w-64 p-0">
+      <PopoverContent align="start" className={cn('w-64 p-0', noFocusRing)}>
         <Command className="rounded-md border-none bg-transparent shadow-none">
           <CommandInput
             placeholder="Search repos…"
-            className="h-9 rounded-t-md border-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className={cn('h-9 rounded-t-md border-none', noFocusRing)}
           />
           <CommandList>
             <CommandEmpty>No repositories found</CommandEmpty>
@@ -350,7 +495,7 @@ function RepoSwitcher({
                       onSelect?.(repo);
                       setOpen(false);
                     }}
-                    className="gap-2"
+                    className={cn('gap-2', noFocusRing)}
                   >
                     <span className="flex-1 truncate text-sm">{repo.name}</span>
                     <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -372,7 +517,7 @@ function RepoSwitcher({
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start gap-2 text-muted-foreground"
+              className={cn('w-full justify-start gap-2 text-muted-foreground', noFocusRing)}
               onClick={() => {
                 onAdd?.();
                 setOpen(false);
@@ -403,23 +548,39 @@ function UserFooter({
 }) {
   if (!user) return null;
 
+  const initials = user.name
+    .split(' ')
+    .map(w => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
   const trigger = (
     <button
       className={cn(
-        'flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-foreground/[0.045]',
+        'flex h-9 w-full items-center gap-2 rounded-md px-2',
+        noFocusRing,
+        'hover:bg-foreground/[0.045]',
         !sidebarOpen && 'w-9 justify-center px-0'
       )}
       aria-label="Account menu"
     >
-      <img
-        src={user.avatar}
-        alt={user.name}
-        className="h-6 w-6 shrink-0 rounded-full ring-1 ring-border/60"
-      />
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+        {user.avatar ? (
+          <img src={user.avatar} alt={user.name} className="h-full w-full rounded-full" />
+        ) : (
+          initials
+        )}
+      </span>
       {sidebarOpen && (
         <>
-          <span className="flex-1 truncate text-left font-medium">{user.name}</span>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-foreground/40" />
+          <span className="flex min-w-0 flex-1 flex-col items-start leading-[1.15]">
+            <span className="max-w-full truncate text-[13px] font-medium">{user.name}</span>
+            <span className="max-w-full truncate text-[11px] text-muted-foreground">
+              {user.email}
+            </span>
+          </span>
+          <ChevronsUpDown className="h-3 w-3 shrink-0 text-muted-foreground/60" />
         </>
       )}
     </button>
@@ -439,30 +600,42 @@ function UserFooter({
       ) : (
         <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       )}
-      <DropdownMenuContent align="start" side="top" className="w-56">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium">{user.name}</p>
-            <p className="text-xs text-muted-foreground">{user.email}</p>
-          </div>
-        </DropdownMenuLabel>
+      <DropdownMenuContent
+        align={sidebarOpen ? 'start' : 'center'}
+        side="top"
+        className={cn('w-44', noFocusRing)}
+      >
+        <DropdownMenuItem
+          onClick={() => onNavigate('settings')}
+          className={cn('focus:bg-foreground/[0.045] focus:text-foreground', noFocusRing)}
+        >
+          <UserIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+          <span className="text-[13px]">Profile</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => onNavigate('team')}
+          className={cn('focus:bg-foreground/[0.045] focus:text-foreground', noFocusRing)}
+        >
+          <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+          <span className="text-[13px]">Team</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => onNavigate('settings')}
+          className={cn('focus:bg-foreground/[0.045] focus:text-foreground', noFocusRing)}
+        >
+          <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
+          <span className="text-[13px]">Settings</span>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onNavigate('settings')}>
-          <UserIcon className="mr-2 h-4 w-4" />
-          Profile
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onNavigate('team')}>
-          <Users className="mr-2 h-4 w-4" />
-          Team
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onNavigate('settings')}>
-          <Settings className="mr-2 h-4 w-4" />
-          Settings
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onLogout} className="text-destructive">
+        <DropdownMenuItem
+          onClick={onLogout}
+          className={cn(
+            'focus:bg-foreground/[0.045] focus:text-destructive text-destructive',
+            noFocusRing
+          )}
+        >
           <LogOut className="mr-2 h-4 w-4" />
-          Log out
+          <span className="text-[13px]">Log out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -485,6 +658,8 @@ export function Sidebar({
   knowledgeCategories = [],
   activeDocId,
   onSelectDoc,
+  onCreateCategory,
+  onCreateDoc,
 }: SidebarProps) {
   const [exploreCollapsed, setExploreCollapsed] = useState(false);
   const [syncCollapsed, setSyncCollapsed] = useState(false);
@@ -511,10 +686,18 @@ export function Sidebar({
           </div>
           {isOpen && (
             <>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-foreground/50">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn('h-7 w-7 text-foreground/50', noFocusRing)}
+              >
                 <Search className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-foreground/50">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn('h-7 w-7 text-foreground/50', noFocusRing)}
+              >
                 <SquarePen className="h-4 w-4" />
               </Button>
             </>
@@ -589,6 +772,8 @@ export function Sidebar({
               onToggleSection={() => setKnowledgeCollapsed(v => !v)}
               activeDocId={activeDocId}
               onSelectDoc={onSelectDoc}
+              onCreateCategory={onCreateCategory}
+              onCreateDoc={onCreateDoc}
             />
           </nav>
         </ScrollArea>
@@ -625,7 +810,11 @@ export function Sidebar({
               variant="ghost"
               size="icon"
               onClick={onToggle}
-              className={cn('h-6 w-6 shrink-0 text-foreground/40 hover:text-foreground/70', !isOpen && 'hidden')}
+              className={cn(
+                'h-6 w-6 shrink-0 text-foreground/40 hover:text-foreground/70',
+                noFocusRing,
+                !isOpen && 'hidden'
+              )}
               aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
             >
               <PanelLeftClose className="h-3.5 w-3.5" />
@@ -639,7 +828,7 @@ export function Sidebar({
               variant="ghost"
               size="icon"
               onClick={onToggle}
-              className="h-6 w-6 text-foreground/40 hover:text-foreground/70"
+              className={cn('h-6 w-6 text-foreground/40 hover:text-foreground/70', noFocusRing)}
               aria-label="Expand sidebar"
             >
               <PanelLeftOpen className="h-3.5 w-3.5" />
