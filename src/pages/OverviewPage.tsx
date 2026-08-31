@@ -130,20 +130,15 @@ function StatCard({
   label,
   value,
   icon: Icon,
-  delay = 0,
 }: {
   label: string;
   value: string;
   icon: React.ElementType;
-  delay?: number;
 }) {
   return (
-    <Card
-      className="animate-fade-in-up gap-0 p-0 shadow-xs transition-all hover:-translate-y-px hover:border-border hover:shadow-md"
-      style={{ animationDelay: `${delay}ms`, animationFillMode: 'both' }}
-    >
+    <Card className="gap-0 p-0 shadow-xs transition-colors hover:border-foreground/20">
       <CardContent className="px-5 py-4">
-        <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg border border-ramp-blue/15 bg-ramp-blue/10 text-ramp-blue">
+        <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary">
           <Icon className="h-[15px] w-[15px]" strokeWidth={1.75} />
         </div>
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -262,7 +257,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
   if (isLoading) {
     return (
       <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 bg-background">
-        <Spinner className="h-[22px] w-[22px] text-ramp-blue" />
+        <Spinner className="h-[22px] w-[22px] text-primary" />
         <p className="text-sm text-muted-foreground">Loading overview…</p>
       </div>
     );
@@ -271,10 +266,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
   if (error) {
     return (
       <div className="mx-auto w-full max-w-[1200px] px-6 py-8 lg:px-10">
-        <Alert
-          variant="destructive"
-          className="animate-fade-in border-destructive/20 bg-destructive/10"
-        >
+        <Alert variant="destructive">
           <AlertCircle />
           <AlertTitle className="text-sm font-semibold">Failed to load overview</AlertTitle>
           <AlertDescription className="gap-2.5">
@@ -282,7 +274,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
             <Button
               variant="link"
               size="sm"
-              className="h-auto gap-1 p-0 text-[13px] font-medium text-ramp-blue hover:opacity-75"
+              className="h-auto gap-1 p-0 text-[13px] font-medium"
               onClick={() => initOverview()}
             >
               Try again <ChevronRight className="h-3.5 w-3.5" />
@@ -294,10 +286,10 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] animate-fade-in px-6 pb-12 pt-8 font-sans lg:px-10">
+    <div className="mx-auto w-full max-w-[1200px] px-6 pb-12 pt-8 font-sans lg:px-10">
       {/* ── Sync notification ── */}
       {isBehind && (
-        <Alert className="mb-[18px] animate-fade-in-up rounded-xl border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+        <Alert className="mb-[18px] border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400">
           <AlertCircle />
           <AlertDescription className="w-full justify-items-stretch text-[13px] text-amber-700 dark:text-amber-300">
             <div className="flex w-full flex-wrap items-center gap-2.5">
@@ -312,7 +304,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
                 <Button
                   variant="outline"
                   size="sm"
-                  className="ml-auto h-7 rounded-lg border-amber-500/30 bg-amber-500/10 text-xs font-semibold text-amber-700 hover:bg-amber-500/20 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
+                  className="ml-auto h-7 border-amber-500/30 bg-amber-500/10 text-xs font-semibold text-amber-700 hover:bg-amber-500/20 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
                   onClick={onRescan}
                 >
                   Rescan now
@@ -330,7 +322,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
             <GitBranch className="h-3.5 w-3.5" strokeWidth={2} />
             <span>{repository.fullName}</span>
           </div>
-          <h1 className="font-heading text-[27px] font-bold leading-tight tracking-tight text-foreground">
+          <h1 className="text-[27px] font-bold leading-tight tracking-tight text-foreground">
             Overview
           </h1>
           <p className="text-[13.5px] leading-relaxed text-muted-foreground">
@@ -342,7 +334,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
           <Badge
             variant="outline"
             className={cn(
-              'h-7 gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors',
+              'h-7 gap-1.5 rounded-full px-2.5 text-xs font-medium',
               isBehind
                 ? 'border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400'
                 : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
@@ -350,7 +342,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
           >
             <span
               className={cn(
-                'h-1.5 w-1.5 animate-pulse-glow rounded-full',
+                'h-1.5 w-1.5 rounded-full',
                 isBehind ? 'bg-amber-500' : 'bg-emerald-500'
               )}
             />
@@ -368,13 +360,11 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
             ].map((option) => (
               <Button
                 key={option.value}
-                variant="ghost"
+                variant={timeRange === option.value ? 'default' : 'ghost'}
                 size="sm"
                 className={cn(
                   'h-[26px] min-w-8 rounded-md px-2 font-mono text-[11px] font-semibold',
-                  timeRange === option.value
-                    ? 'bg-ramp-blue text-white shadow-glow-sm hover:bg-ramp-blue-dark hover:text-white'
-                    : 'text-muted-foreground hover:text-foreground'
+                  timeRange !== option.value && 'text-muted-foreground hover:text-foreground'
                 )}
                 onClick={() => { setTimeRange(option.value); setShowCustomPicker(false); }}
               >
@@ -382,13 +372,11 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
               </Button>
             ))}
             <Button
-              variant="ghost"
+              variant={timeRange === 'custom' ? 'default' : 'ghost'}
               size="sm"
               className={cn(
                 'h-[26px] min-w-8 rounded-md px-2',
-                timeRange === 'custom'
-                  ? 'bg-ramp-blue text-white shadow-glow-sm hover:bg-ramp-blue-dark hover:text-white'
-                  : 'text-muted-foreground hover:text-foreground'
+                timeRange !== 'custom' && 'text-muted-foreground hover:text-foreground'
               )}
               onClick={() => { setTimeRange('custom'); setShowCustomPicker(v => !v); }}
               title="Custom date range"
@@ -401,7 +389,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
             onClick={() => initOverview(true)}
             disabled={isRefreshing}
             title="Refresh"
@@ -414,7 +402,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
             <Button
               variant="outline"
               size="sm"
-              className="h-8 gap-1.5 rounded-lg text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
+              className="h-8 gap-1.5 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
               onClick={onRescan}
               title="Re-scan repository"
             >
@@ -427,7 +415,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
 
       {/* ── Custom date picker ── */}
       {showCustomPicker && (
-        <Card className="mb-5 animate-fade-in-up gap-0 p-0 shadow-xs">
+        <Card className="mb-5 gap-0 p-0 shadow-xs">
           <CardContent className="flex flex-wrap items-end gap-3 px-[18px] py-3.5">
             <div className="flex flex-col gap-1">
               <Label
@@ -441,7 +429,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
                 type="date"
                 value={customSince}
                 onChange={(e) => setCustomSince(e.target.value)}
-                className="h-8 w-[168px] rounded-lg bg-muted/40 font-mono text-[12.5px] focus-visible:border-ramp-blue focus-visible:ring-ramp-blue/30"
+                className="h-8 w-[168px] bg-muted/40 font-mono text-[12.5px]"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -456,12 +444,12 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
                 type="date"
                 value={customUntil}
                 onChange={(e) => setCustomUntil(e.target.value)}
-                className="h-8 w-[168px] rounded-lg bg-muted/40 font-mono text-[12.5px] focus-visible:border-ramp-blue focus-visible:ring-ramp-blue/30"
+                className="h-8 w-[168px] bg-muted/40 font-mono text-[12.5px]"
               />
             </div>
             <Button
               size="sm"
-              className="h-8 rounded-lg bg-ramp-blue px-4 text-xs font-semibold text-white hover:bg-ramp-blue-dark hover:shadow-glow-sm"
+              className="h-8 px-4 text-xs font-semibold"
               onClick={() => initOverview()}
               disabled={!customSince}
             >
@@ -473,8 +461,8 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
 
       {/* ── Stat row ── */}
       <div className="mb-7 grid grid-cols-2 gap-3.5 md:grid-cols-4">
-        {quickStats.map((s, i) => (
-          <StatCard key={s.label} {...s} delay={i * 60} />
+        {quickStats.map((s) => (
+          <StatCard key={s.label} {...s} />
         ))}
       </div>
 
@@ -491,7 +479,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
                 href={`https://github.com/${repository.fullName}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs font-medium text-ramp-blue opacity-80 transition-opacity hover:opacity-100"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary opacity-80 transition-opacity hover:opacity-100"
               >
                 Open on GitHub <ExternalLink className="h-[11px] w-[11px]" />
               </a>
@@ -552,10 +540,7 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
           {/* Recent changes */}
           <Card className="gap-0 overflow-hidden p-0 shadow-xs">
             <SectionHeader title="Recent commits">
-              <Badge
-                variant="secondary"
-                className="h-5 min-w-5 border-transparent bg-ramp-blue/10 px-1.5 font-mono text-[11px] font-semibold tabular-nums text-ramp-blue"
-              >
+              <Badge variant="secondary" className="h-5 min-w-5 px-1.5 font-mono text-[11px] font-semibold tabular-nums">
                 {recentCommits.length}
               </Badge>
             </SectionHeader>
@@ -566,11 +551,10 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
                 </p>
               ) : (
                 <ul className="divide-y divide-border">
-                  {recentCommits.map((commit: ApiOverviewCommit, i) => (
+                  {recentCommits.map((commit: ApiOverviewCommit) => (
                     <li
                       key={commit.sha}
-                      className="flex animate-fade-in-up items-start justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/50"
-                      style={{ animationDelay: `${i * 40}ms`, animationFillMode: 'both' }}
+                      className="flex items-start justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/50"
                     >
                       <div className="flex min-w-0 flex-1 items-start gap-2.5">
                         <GitCommit className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -606,39 +590,28 @@ export function OverviewPage({ repository, repoId, onRescan }: OverviewPageProps
                   icon: Network,
                   label: 'View Architecture',
                   sub: 'Explore the system diagram',
-                  accent: '#60a5fa',
-                  accentBg: 'rgba(96,165,250,0.08)',
                 },
                 {
                   icon: BookOpen,
                   label: 'Read Storybook',
                   sub: 'Learn the codebase structure',
-                  accent: '#a78bfa',
-                  accentBg: 'rgba(167,139,250,0.08)',
                 },
                 {
                   icon: Workflow,
                   label: 'Trace Flows',
                   sub: 'Follow feature execution paths',
-                  accent: '#34d399',
-                  accentBg: 'rgba(52,211,153,0.08)',
                 },
                 {
                   icon: Zap,
                   label: 'Run Analysis',
                   sub: 'Re-analyze the latest changes',
-                  accent: '#fbbf24',
-                  accentBg: 'rgba(251,191,36,0.08)',
                 },
               ].map((action, i) => (
                 <button
                   key={i}
                   className="group flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-muted/50"
                 >
-                  <span
-                    className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg transition-transform group-hover:scale-105"
-                    style={{ background: action.accentBg, color: action.accent }}
-                  >
+                  <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-muted text-foreground/70 transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                     <action.icon className="h-[15px] w-[15px]" strokeWidth={1.75} />
                   </span>
                   <span className="flex flex-1 flex-col gap-px">
@@ -748,9 +721,7 @@ function CommitSparkline({ commits, timeRange }: { commits: ApiOverviewCommit[];
               <div
                 className={cn(
                   'min-h-1 w-[70%] rounded-t transition-[height] duration-300',
-                  isEmpty
-                    ? 'bg-muted'
-                    : 'bg-gradient-to-t from-ramp-blue to-ramp-blue-light'
+                  isEmpty ? 'bg-muted' : 'bg-primary'
                 )}
                 style={{
                   height: `${Math.max(pct * 80, isEmpty ? 6 : 10)}px`,
