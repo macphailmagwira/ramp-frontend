@@ -300,9 +300,12 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
 
   const activateFlow = useCallback((flow: EnrichedFlow, graph: ApiFlowGraph) => {
     const { nodes, edges } = filterGraphToFlow(flow, graph.function_nodes, graph.function_edges);
+    // Fall back to the full graph when a flow's steps don't map to any function nodes
+    const useNodes = nodes.length > 0 ? nodes : graph.function_nodes;
+    const useEdges = nodes.length > 0 ? edges : graph.function_edges;
     setActiveFlow(flow);
-    setLayouted(layoutNodes(nodes, edges));
-    setActiveEdges(edges);
+    setLayouted(layoutNodes(useNodes, useEdges));
+    setActiveEdges(useEdges);
     setInTourMode(false);
     setSelectedNode(null);
     setScale(1);
@@ -335,23 +338,30 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
       });
       setDiscoveredFlows(discovered.flows);
 
-      // Auto-enrich + activate first flow
+      // Pre-enrich every discovered flow up front so selecting is instant
       if (discovered.flows.length > 0) {
-        const first = discovered.flows[0];
-        setSelectedFlowId(first.id);
-        setIsDiscovering(false);
+        setSelectedFlowId(discovered.flows[0].id);
         setIsEnriching(true);
 
-        const story = await api.ai.enrichFlow({
-          repo_id: effectiveRepoId,
-          flow_name: first.name,
-          function_nodes: graph.function_nodes,
-          function_edges: graph.function_edges,
-        });
+        const enriched = await Promise.all(
+          discovered.flows.map(async (f): Promise<EnrichedFlow> => {
+            try {
+              const story = await api.ai.enrichFlow({
+                repo_id: effectiveRepoId,
+                flow_name: f.name,
+                function_nodes: graph.function_nodes,
+                function_edges: graph.function_edges,
+              });
+              return { id: f.id, ...story };
+            } catch {
+              // Keep the flow clickable even if its enrichment fails
+              return { id: f.id, name: f.name, description: f.description, steps: [] } as EnrichedFlow;
+            }
+          })
+        );
 
-        const enriched: EnrichedFlow = { id: first.id, ...story };
-        setEnrichedFlows([enriched]);
-        activateFlow(enriched, graph);
+        setEnrichedFlows(enriched);
+        if (enriched[0]) activateFlow(enriched[0], graph);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -369,35 +379,16 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
   // ── Select a flow from sidebar ────────────────────────────────────────────
 
   const selectFlow = useCallback(async (summary: DiscoveredFlowSummary) => {
-    if (!fullGraph || !effectiveRepoId) return;
+    if (!fullGraph) return;
     setSelectedFlowId(summary.id);
     setError(null);
 
-    // Already enriched — just re-activate with filtered graph
+    // All flows are pre-enriched on load — just re-activate with the filtered graph
     const existing = enrichedFlows.find(f => f.id === summary.id);
     if (existing) {
       activateFlow(existing, fullGraph);
-      return;
     }
-
-    setIsEnriching(true);
-    try {
-      const story = await api.ai.enrichFlow({
-        repo_id: effectiveRepoId,
-        flow_name: summary.name,
-        function_nodes: fullGraph.function_nodes,
-        function_edges: fullGraph.function_edges,
-      });
-
-      const enriched: EnrichedFlow = { id: summary.id, ...story };
-      setEnrichedFlows(prev => [...prev, enriched]);
-      activateFlow(enriched, fullGraph);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load flow.');
-    } finally {
-      setIsEnriching(false);
-    }
-  }, [fullGraph, effectiveRepoId, enrichedFlows, activateFlow]);
+  }, [fullGraph, enrichedFlows, activateFlow]);
 
   // ── Search — fresh AI call against full graph ─────────────────────────────
 
@@ -498,7 +489,7 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
             </div>
             <div>
               <div className="text-sm font-semibold leading-none text-foreground">Flows</div>
-              <div className="mt-1.5 text-xs text-muted-foreground">AI-discovered execution flows</div>
+              <div className="mt-1.5 text-xs text-muted-foreground">Discovered execution flows</div>
             </div>
           </div>
 
@@ -511,7 +502,7 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
                 onKeyDown={e => e.key === 'Enter' && !isWorking && handleSearch()}
                 placeholder="Ask about a flow…"
                 disabled={isWorking || !fullGraph}
-                className="h-9 rounded-lg bg-background pl-9 text-sm"
+                className="h-9 rounded-lg bg-background pl-9 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-border"
               />
             </div>
             <Button
