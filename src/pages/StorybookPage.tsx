@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
 import type {
   ApiFlowGraph,
@@ -37,6 +37,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Empty, EmptyMedia, EmptyDescription } from '@/components/ui/empty';
 
 // ─── Extended types ────────────────────────────────────────────────────────────
@@ -113,41 +114,11 @@ function StepIcon({ type, size = 13 }: { type: string; size?: number }) {
 
 // ─── Loading overlay ───────────────────────────────────────────────────────────
 
-const PHRASES = [
-  'Reading the call graph…',
-  'Tracing execution paths…',
-  'Analysing source snippets…',
-  'Spotting risks…',
-  'Building the narrative…',
-  'Almost there…',
-];
-
 function LoadingOverlay({ message }: { message: string }) {
-  const [idx, setIdx] = useState(0);
-  const [vis, setVis] = useState(true);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setVis(false);
-      setTimeout(() => { setIdx(i => (i + 1) % PHRASES.length); setVis(true); }, 360);
-    }, 2100);
-    return () => clearInterval(t);
-  }, []);
-
   return (
-    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-background">
-      <div className="relative flex size-16 items-center justify-center rounded-full border border-ramp-blue/30 bg-ramp-blue/10 shadow-glow-sm">
-        <Spinner className="size-5 text-ramp-blue" />
-      </div>
-      <div className="font-heading text-sm font-semibold text-foreground">{message}</div>
-      <div
-        className={cn(
-          'min-h-[18px] font-mono text-[11px] text-muted-foreground transition-opacity duration-300',
-          vis ? 'opacity-100' : 'opacity-0'
-        )}
-      >
-        {PHRASES[idx]}
-      </div>
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/80 backdrop-blur-sm">
+      <Spinner className="size-6 text-ramp-blue" />
+      <div className="text-sm font-medium text-muted-foreground">{message}</div>
     </div>
   );
 }
@@ -311,7 +282,7 @@ function StepCard({
       {isExpanded && (
         <div className="animate-fade-in px-4 pb-4 pl-[54px]">
           {step.insight && (
-            <div className="mb-2.5 inline-flex items-center rounded-md border border-border bg-muted px-2 py-1 font-mono text-[11px] italic text-muted-foreground">
+              <div className="mb-2.5 inline-flex items-center rounded-md border border-border bg-muted px-2 py-1 text-[11px] italic text-muted-foreground">
               {step.insight}
             </div>
           )}
@@ -347,7 +318,7 @@ function RisksSection({ risks }: { risks: string[] }) {
     <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/5 p-5">
       <div className="mb-3 flex items-center gap-2">
         <ShieldAlert className="size-4 text-amber-500" />
-        <span className="font-mono text-xs font-bold uppercase tracking-wide text-amber-600 dark:text-amber-500">
+        <span className="text-xs font-bold uppercase tracking-wide text-amber-600 dark:text-amber-500">
           Risks &amp; gotchas
         </span>
       </div>
@@ -431,7 +402,7 @@ function StoryPanel({
               </div>
             )}
 
-            <h1 className="font-heading mb-2.5 text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="mb-2.5 text-2xl font-bold tracking-tight text-foreground">
               {flow.name}
             </h1>
 
@@ -607,6 +578,13 @@ export function StorybookPage({ repoId }: StorybookPageProps) {
   const [isRegenerating, setIsRegenerating] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+
+  // Sequential enrichment queue (one story at a time)
+  const graphRef = useRef<ApiFlowGraph | null>(null);
+  const flowMapRef = useRef<Map<string, DiscoveredFlowSummary>>(new Map());
+  const queueRef = useRef<string[]>([]);
+  const processingRef = useRef(false);
 
   const isWorking = isLoadingGraph || isDiscovering || isEnriching || isSearching;
   const loadingMessage =
@@ -626,13 +604,56 @@ export function StorybookPage({ repoId }: StorybookPageProps) {
     steps: enrichStepsWithSource(story.steps, nodes),
   }), []);
 
+  const enrichOne = useCallback(async (f: DiscoveredFlowSummary) => {
+    const graph = graphRef.current;
+    if (!graph) return;
+    setLoadingIds(prev => new Set(prev).add(f.id));
+    try {
+      const story: FlowStoryResponse = await api.ai.enrichFlow({
+        repo_id: effectiveRepoId!,
+        flow_name: f.name,
+        function_nodes: graph.function_nodes,
+        function_edges: graph.function_edges,
+      });
+      const enriched = { id: f.id, ...attachSourceCode(story, graph.function_nodes as FlowNode[]) };
+      setEnrichedFlows(prev =>
+        prev.some(e => e.id === enriched.id) ? prev : [...prev, enriched]
+      );
+    } catch {
+      /* ignore individual failures */
+    } finally {
+      setLoadingIds(prev => {
+        const n = new Set(prev);
+        n.delete(f.id);
+        return n;
+      });
+    }
+  }, [effectiveRepoId, attachSourceCode]);
+
+  // Process the queue one story at a time; each becomes available as it finishes
+  const processQueue = useCallback(async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    while (queueRef.current.length > 0) {
+      const id = queueRef.current.shift()!;
+      const f = flowMapRef.current.get(id);
+      if (f) await enrichOne(f);
+    }
+    processingRef.current = false;
+  }, [enrichOne]);
+
   const initFlows = useCallback(async () => {
     if (!effectiveRepoId) return;
     setError(null);
+    setEnrichedFlows([]);
+    setLoadingIds(new Set());
+    queueRef.current = [];
+    processingRef.current = false;
     setIsLoadingGraph(true);
     try {
       const graph: ApiFlowGraph = await api.flow.getFlow(effectiveRepoId);
       setFullGraph(graph);
+      graphRef.current = graph;
       setIsLoadingGraph(false);
 
       if (!graph.function_nodes.length) {
@@ -647,61 +668,42 @@ export function StorybookPage({ repoId }: StorybookPageProps) {
         function_edges: graph.function_edges,
       });
       setDiscoveredFlows(discovered.flows);
+      setIsDiscovering(false);
 
-      if (discovered.flows.length > 0) {
-        const first = discovered.flows[0];
-        setSelectedFlowId(first.id);
-        setIsDiscovering(false);
-        setIsEnriching(true);
+      if (discovered.flows.length === 0) return;
 
-        const story: FlowStoryResponse = await api.ai.enrichFlow({
-          repo_id: effectiveRepoId,
-          flow_name: first.name,
-          function_nodes: graph.function_nodes,
-          function_edges: graph.function_edges,
-        });
-        setEnrichedFlows([{
-          id: first.id,
-          ...attachSourceCode(story, graph.function_nodes as FlowNode[]),
-        }]);
-      }
+      flowMapRef.current = new Map(discovered.flows.map(f => [f.id, f]));
+      const [first, ...rest] = discovered.flows;
+
+      // Load + activate the first story so the user sees content immediately
+      setSelectedFlowId(first.id);
+      await enrichOne(first);
+
+      // Queue the rest to be prepared one by one in the background
+      queueRef.current = rest.map(f => f.id);
+      processQueue();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setIsLoadingGraph(false);
       setIsDiscovering(false);
-      setIsEnriching(false);
     }
-  }, [effectiveRepoId, attachSourceCode]);
+  }, [effectiveRepoId, enrichOne, processQueue]);
 
   useEffect(() => {
     if (effectiveRepoId) initFlows();
   }, [effectiveRepoId]); // eslint-disable-line
 
   const selectFlow = useCallback(async (summary: DiscoveredFlowSummary) => {
-    if (!fullGraph || !effectiveRepoId) return;
-    setSelectedFlowId(summary.id);
     setError(null);
-    if (enrichedFlows.find(f => f.id === summary.id)) return;
-
-    setIsEnriching(true);
-    try {
-      const story: FlowStoryResponse = await api.ai.enrichFlow({
-        repo_id: effectiveRepoId,
-        flow_name: summary.name,
-        function_nodes: fullGraph.function_nodes,
-        function_edges: fullGraph.function_edges,
-      });
-      setEnrichedFlows(prev => [...prev, {
-        id: summary.id,
-        ...attachSourceCode(story, fullGraph.function_nodes as FlowNode[]),
-      }]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load story.');
-    } finally {
-      setIsEnriching(false);
+    setSelectedFlowId(summary.id);
+    // Already loaded — just show it. Otherwise prioritise it in the queue.
+    const alreadyLoaded = enrichedFlows.some(f => f.id === summary.id);
+    if (!alreadyLoaded) {
+      queueRef.current = [summary.id, ...queueRef.current.filter(id => id !== summary.id)];
+      processQueue();
     }
-  }, [fullGraph, effectiveRepoId, enrichedFlows, attachSourceCode]);
+  }, [enrichedFlows, processQueue]);
 
   const regenerate = useCallback(async () => {
     if (!activeFlow || !fullGraph || !effectiveRepoId) return;
@@ -770,36 +772,37 @@ export function StorybookPage({ repoId }: StorybookPageProps) {
   return (
     <div className="relative flex h-full overflow-hidden bg-background font-sans">
       {/* ── Sidebar ── */}
-      <aside className="flex w-[260px] flex-shrink-0 flex-col border-r border-border bg-card">
+      <aside className="flex w-[300px] flex-shrink-0 flex-col border-r border-border bg-card">
+
         {/* Sidebar header */}
-        <div className="border-b border-border p-3.5">
-          <div className="mb-3.5 flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-lg border border-ramp-blue/30 bg-ramp-blue/10">
-              <BookOpen className="size-3.5 text-ramp-blue" />
+        <div className="border-b border-border px-5 pb-4 pt-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl border border-ramp-blue/30 bg-ramp-blue/10">
+              <BookOpen className="size-4 text-ramp-blue" />
             </div>
             <div>
-              <div className="font-heading text-[12.5px] font-bold tracking-tight text-foreground">
-                Storybook
-              </div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">AI-generated flow stories</div>
+              <div className="text-sm font-semibold leading-none text-foreground">Storybook</div>
+              <div className="mt-1.5 text-xs text-muted-foreground">Generate flow stories</div>
             </div>
           </div>
 
-          {/* Search */}
-          <div className="flex gap-1.5">
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !isWorking) handleSearch(); }}
-              placeholder="Find a flow…"
-              disabled={isWorking || !fullGraph}
-              className="h-9"
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/70" />
+              <Input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !isWorking) handleSearch(); }}
+                placeholder="Find a flow…"
+                disabled={isWorking || !fullGraph}
+                className="h-9 rounded-lg bg-background pl-9 text-sm"
+              />
+            </div>
             <Button
               size="icon"
               onClick={handleSearch}
               disabled={isWorking || !searchQuery.trim() || !fullGraph}
-              className="bg-ramp-blue shadow-glow-sm hover:bg-ramp-blue-dark"
+              className="h-9 w-9 shrink-0 bg-ramp-blue shadow-glow-sm hover:bg-ramp-blue-dark"
             >
               {isSearching
                 ? <Spinner className="size-4" />
@@ -809,74 +812,76 @@ export function StorybookPage({ repoId }: StorybookPageProps) {
         </div>
 
         {/* Flow list */}
-        <div className="flex-1 space-y-1 overflow-y-auto p-1.5">
-          {(isLoadingGraph || isDiscovering) && (
-            <div className="space-y-2 p-2">
-              {[0, 1, 2].map(i => (
-                <Skeleton key={i} className="h-12 w-full rounded-lg" />
-              ))}
-            </div>
-          )}
+        <ScrollArea className="flex-1">
+          <div className="space-y-1.5 p-3">
+            {(isLoadingGraph || isDiscovering) && (
+              <div className="space-y-2 p-2">
+                {[0, 1, 2].map(i => (
+                  <Skeleton key={i} className="h-12 w-full rounded-lg" />
+                ))}
+              </div>
+            )}
 
-          {!isLoadingGraph && !isDiscovering && discoveredFlows.length === 0 && !error && (
-            <div className="p-8 text-center text-[11px] leading-relaxed text-muted-foreground">
-              No flows discovered yet
-            </div>
-          )}
+            {!isLoadingGraph && !isDiscovering && discoveredFlows.length === 0 && !error && (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                No flows discovered yet
+              </div>
+            )}
 
-          {discoveredFlows.length > 0 && (
-            <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Flows
-            </div>
-          )}
+            {discoveredFlows.length > 0 && (
+              <div className="px-1 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Flows
+              </div>
+            )}
 
-          {discoveredFlows.map(summary => {
-            const isActive     = selectedFlowId === summary.id;
-            const isLoadingThis = isEnriching && selectedFlowId === summary.id;
-            const isDone        = enrichedFlows.some(f => f.id === summary.id);
+            {discoveredFlows.map(summary => {
+              const isActive      = selectedFlowId === summary.id;
+              const isLoadingThis = loadingIds.has(summary.id);
+              const isDone        = enrichedFlows.some(f => f.id === summary.id);
 
-            return (
-              <button
-                key={summary.id}
+              return (
+                <button
+                  key={summary.id}
                 onClick={() => selectFlow(summary)}
-                disabled={isEnriching}
+                disabled={isLoadingThis}
                 className={cn(
-                  'w-full rounded-lg border p-2.5 text-left transition-all',
+                  'w-full rounded-lg border p-3 text-left transition-all',
                   isActive
-                    ? 'border-ramp-blue bg-ramp-blue/5'
-                    : 'border-transparent hover:bg-muted',
-                  isEnriching && !isActive && 'opacity-40'
+                    ? 'border-ramp-blue/40 bg-ramp-blue/10'
+                    : 'border-transparent hover:border-border hover:bg-muted',
+                  isLoadingThis && 'opacity-60'
                 )}
-              >
-                <div className="mb-1 flex items-center gap-1.5">
-                  {isLoadingThis
-                    ? <Spinner className="size-3 text-ramp-blue" />
-                    : <span
-                        className={cn(
-                          'size-1.5 flex-shrink-0 rounded-full',
-                          isActive ? 'bg-ramp-blue' : isDone ? 'bg-emerald-500' : 'bg-muted-foreground/50'
-                        )}
-                      />
-                  }
-                  <span className="truncate font-mono text-[11.5px] font-semibold tracking-tight text-foreground">
-                    {summary.name}
-                  </span>
-                </div>
-                <p className="mb-1 line-clamp-2 pl-3 text-[11px] leading-snug text-muted-foreground">
-                  {summary.description}
-                </p>
-                <div className="pl-3 text-[10px] text-muted-foreground/80">
-                  {summary.function_count} functions
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    {isLoadingThis
+                      ? <Spinner className="size-3 text-ramp-blue" />
+                      : <span
+                          className={cn(
+                            'size-1.5 flex-shrink-0 rounded-full',
+                            isActive ? 'bg-ramp-blue' : isDone ? 'bg-emerald-500' : 'bg-muted-foreground/50'
+                          )}
+                        />
+                    }
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {summary.name}
+                    </span>
+                  </div>
+                  <p className="mb-1.5 line-clamp-2 pl-3.5 text-xs leading-snug text-muted-foreground">
+                    {summary.description}
+                  </p>
+                  <div className="pl-3.5 text-[10px] text-muted-foreground/80">
+                    {summary.function_count} functions
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </ScrollArea>
       </aside>
 
       {/* ── Main content ── */}
       <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
-        {isWorking && <LoadingOverlay message={loadingMessage} />}
+        {isWorking && !activeFlow && <LoadingOverlay message={loadingMessage} />}
 
         {/* Error banner */}
         {error && !isWorking && (
