@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import {
   Workflow, ZoomIn, ZoomOut, Maximize2, Search,
@@ -487,76 +488,90 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
     <div className="flex h-full bg-background">
 
       {/* Sidebar */}
-      <div className="flex w-[280px] shrink-0 flex-col border-r border-border bg-card">
-        <div className="border-b border-border px-4 pb-3 pt-4">
-          <div className="mb-3 flex items-center gap-2.5">
-            <div className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-ramp-blue/30 bg-ramp-blue/15">
-              <Workflow className="h-3.5 w-3.5 text-ramp-blue" />
+      <div className="flex w-[300px] shrink-0 flex-col border-r border-border bg-card">
+
+        {/* Header */}
+        <div className="border-b border-border px-5 pb-4 pt-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-ramp-blue/30 bg-ramp-blue/10">
+              <Workflow className="h-4 w-4 text-ramp-blue" />
             </div>
             <div>
-              <div className="text-[13px] font-semibold text-foreground">Flows</div>
-              <div className="text-[10px] text-muted-foreground">AI-discovered execution flows</div>
+              <div className="text-sm font-semibold leading-none text-foreground">Flows</div>
+              <div className="mt-1.5 text-xs text-muted-foreground">AI-discovered execution flows</div>
             </div>
           </div>
 
-          <div className="flex gap-1.5">
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !isWorking && handleSearch()}
-              placeholder="Ask about a flow…"
-              disabled={isWorking || !fullGraph}
-              className="h-8 rounded-lg bg-background px-2.5 text-[11px]"
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/70" />
+              <Input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !isWorking && handleSearch()}
+                placeholder="Ask about a flow…"
+                disabled={isWorking || !fullGraph}
+                className="h-9 rounded-lg bg-background pl-9 text-sm"
+              />
+            </div>
             <Button
               size="icon"
               onClick={handleSearch}
               disabled={isWorking || !searchQuery.trim() || !fullGraph}
-              className="h-8 w-8 shrink-0 bg-ramp-blue text-white hover:bg-ramp-blue-dark"
+              className="h-9 w-9 shrink-0 bg-ramp-blue text-white hover:bg-ramp-blue-dark"
             >
-              {isSearching ? <Spinner className="h-3 w-3" /> : <Search className="h-3 w-3" />}
+              {isSearching ? <Spinner className="h-4 w-4" /> : <Search className="h-4 w-4" />}
             </Button>
           </div>
-          <div className="mt-1.5 text-[10px] leading-[1.5] text-muted-foreground">
-            AI reads the full graph to find your flow
+        </div>
+
+        {/* Flow list */}
+        <ScrollArea className="flex-1">
+          <div className="space-y-1.5 p-3">
+            {(isLoadingGraph || isDiscovering) && (
+              <div className="flex flex-col items-center gap-2 p-8 text-sm text-muted-foreground">
+                <Spinner className="h-5 w-5" />
+                {isLoadingGraph ? 'Loading graph…' : 'Discovering flows…'}
+              </div>
+            )}
+
+            {!isLoadingGraph && !isDiscovering && discoveredFlows.length === 0 && (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                No flows discovered yet
+              </div>
+            )}
+
+            {discoveredFlows.map(summary => {
+              const isActive = selectedFlowId === summary.id;
+              const isLoadingThis = isEnriching && selectedFlowId === summary.id;
+              return (
+                <button
+                  key={summary.id}
+                  onClick={() => selectFlow(summary)}
+                  disabled={isEnriching || isLoadingThis}
+                  className={cn(
+                    'group w-full rounded-lg border px-3 py-3 text-left transition-all',
+                    isActive
+                      ? 'border-ramp-blue/40 bg-ramp-blue/10'
+                      : 'border-transparent hover:border-border hover:bg-muted',
+                    (isEnriching && !isActive) || isLoadingThis ? 'opacity-60' : '',
+                  )}
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    {isLoadingThis && <Spinner className="h-3 w-3 shrink-0 text-ramp-blue" />}
+                    <div className="truncate text-sm font-medium text-foreground">{summary.name}</div>
+                    <span className="ml-auto shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                      {summary.function_count}
+                    </span>
+                  </div>
+                  <div className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                    {summary.description}
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        </div>
-
-        <div className="flex-1 space-y-1 overflow-y-auto p-2">
-          {(isLoadingGraph || isDiscovering) && (
-            <div className="flex flex-col items-center gap-2 p-8 text-[11px] text-muted-foreground">
-              <Spinner className="h-[18px] w-[18px]" />
-              {isLoadingGraph ? 'Loading graph…' : 'Discovering flows…'}
-            </div>
-          )}
-
-          {!isLoadingGraph && !isDiscovering && discoveredFlows.length === 0 && (
-            <div className="p-8 text-center text-[11px] text-muted-foreground">
-              No flows discovered yet
-            </div>
-          )}
-
-          {discoveredFlows.map(summary => {
-            const isActive = selectedFlowId === summary.id;
-            const isLoadingThis = isEnriching && selectedFlowId === summary.id;
-            return (
-              <button key={summary.id} onClick={() => selectFlow(summary)} disabled={isEnriching}
-                className={cn(
-                  'w-full rounded-lg border px-3 py-2.5 text-left transition-all',
-                  isActive ? 'border-ramp-blue/40 bg-ramp-blue/10' : 'border-border bg-muted/30 hover:bg-muted',
-                  isEnriching && !isActive ? 'opacity-50' : '',
-                )}>
-                <div className="mb-0.5 flex items-center gap-1.5">
-                  {isLoadingThis && <Spinner className="h-2.5 w-2.5 shrink-0 text-ramp-blue" />}
-                  <div className="truncate text-[12px] font-semibold text-foreground">{summary.name}</div>
-                </div>
-                <div className="line-clamp-2 text-[10px] leading-[1.4] text-muted-foreground">
-                  {summary.description}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        </ScrollArea>
       </div>
 
       {/* Main graph */}
