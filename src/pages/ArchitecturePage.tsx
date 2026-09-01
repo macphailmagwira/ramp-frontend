@@ -374,6 +374,7 @@ function SectionNavigator({
 }) {
   const [showJump, setShowJump] = useState(false);
   const current = sections[currentIndex];
+  if (!current) return null;
   const total = sections.length;
 
   const depthColors = ['#3b82f6', '#a855f7', '#10b981', '#f59e0b', '#ec4899', '#14b8a6', '#ef4444'];
@@ -587,7 +588,7 @@ function StoryCard({ story, step, total, onPrev, onNext, onExit, isDark }: {
         : '0 0 0 1px rgba(59,130,246,0.08), 0 32px 64px rgba(0,0,0,0.12)',
       animation: 'story-slide-up 0.35s cubic-bezier(0.34,1.56,0.64,1)',
       overflow: 'hidden',
-      fontFamily: "'JetBrains Mono','Fira Code','SF Mono',monospace",
+      fontFamily: "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji'",
     }}>
       <div style={{ height: 3, background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)' }}>
         <div style={{
@@ -727,8 +728,8 @@ function StoryCard({ story, step, total, onPrev, onNext, onExit, isDark }: {
         padding: '10px 16px', borderTop: `1px solid ${divider}`,
       }}>
         <div style={{ fontSize: 11, color: labelColor }}>
-          Use <kbd style={{ padding: '1px 5px', borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', fontSize: 10, fontFamily: 'monospace' }}>←</kbd>
-          {' '}<kbd style={{ padding: '1px 5px', borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', fontSize: 10, fontFamily: 'monospace' }}>→</kbd>
+          Use <kbd style={{ padding: '1px 5px', borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', fontSize: 10, fontFamily: "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" }}>←</kbd>
+          {' '}<kbd style={{ padding: '1px 5px', borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', fontSize: 10, fontFamily: "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" }}>→</kbd>
           {' '}to navigate
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -999,7 +1000,7 @@ function FolderBoundaryLayer({
               dominantBaseline="central"
               style={{
                 fontSize: 10,
-                fontFamily: "'JetBrains Mono','Fira Code','SF Mono',monospace",
+                fontFamily: "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
                 fontWeight: 700,
                 fill: palette.label,
                 letterSpacing: '0.02em',
@@ -1246,7 +1247,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
     : [];
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: T.bg, fontFamily: "'JetBrains Mono','Fira Code','SF Mono',monospace" }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: T.bg, fontFamily: "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji'" }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: `1px solid ${T.headerBorder}`, background: T.headerBg, flexShrink: 0 }}>
@@ -1466,7 +1467,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
               {graph && isPaginated && (
                 <SectionNavigator
                   sections={sections}
-                  currentIndex={sectionIndex}
+                  currentIndex={Math.min(sectionIndex, Math.max(sections.length - 1, 0))}
                   onGoTo={handleSectionChange}
                   isDark={isDark}
                 />

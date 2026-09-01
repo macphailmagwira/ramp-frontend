@@ -27,7 +27,6 @@ import {
   Moon,
   Monitor,
   ChevronRight,
-  Zap,
   Github,
   ArrowLeft,
   ShieldCheck,
@@ -101,10 +100,6 @@ export function RepositorySelectPage({
           <Button variant="ghost" size="icon" onClick={onBack} className="mr-1 h-9 w-9 text-muted-foreground hover:text-foreground rounded-lg">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-ramp-blue to-ramp-blue-light shadow-glow-sm">
-            <Zap className="h-4 w-4 text-white" strokeWidth={2.25} />
-          </div>
-          <span className="font-heading font-bold text-lg tracking-tight">Ramp</span>
         </div>
 
         <div className="flex items-center gap-1">
@@ -140,7 +135,7 @@ export function RepositorySelectPage({
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-9 gap-2 pl-1.5 pr-2 rounded-lg hover:bg-muted/60">
                   <img src={user.avatar} alt={user.name} className="h-6 w-6 rounded-full ring-1 ring-border/60" />
-                  <span className="hidden sm:inline text-[13px] font-medium">{user.name}</span>
+                  <span className="hidden sm:inline text-sm font-medium">{user.name}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -172,10 +167,10 @@ export function RepositorySelectPage({
         <div className="w-full max-w-4xl animate-fade-in">
           {/* Title */}
           <div className="text-center mb-10">
-            <h1 className="font-heading text-3xl font-bold mb-2 tracking-tight">
+            <h1 className="text-3xl font-bold mb-2 tracking-tight">
               Select a repository
             </h1>
-            <p className="text-muted-foreground text-[15px]">
+            <p className="text-muted-foreground text-base">
               Choose a repository to analyze and generate documentation
             </p>
           </div>
@@ -185,7 +180,7 @@ export function RepositorySelectPage({
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-3 px-1">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.08em]">
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Connected Repositories
                 </h2>
               </div>
@@ -202,9 +197,9 @@ export function RepositorySelectPage({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-medium text-[14px] truncate">{repo.name}</span>
+                          <span className="font-medium text-sm truncate">{repo.name}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground truncate font-mono">
+                        <p className="text-xs text-muted-foreground truncate">
                           {repo.fullName}
                         </p>
                       </div>
@@ -220,7 +215,7 @@ export function RepositorySelectPage({
           <div>
             <div className="flex items-center gap-2 mb-3 px-1">
               <Github className="h-3.5 w-3.5 text-muted-foreground" />
-              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.08em]">
+              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Available Repositories
               </h2>
             </div>
@@ -241,7 +236,7 @@ export function RepositorySelectPage({
             {/* Repository list */}
             <div className="border border-border/70 rounded-xl overflow-hidden bg-card shadow-xs">
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/60 bg-muted/30">
-                <span className="text-[13px] font-medium text-muted-foreground">
+                <span className="text-sm font-medium text-muted-foreground">
                   {isLoading ? 'Loading...' : `${filteredRepos.length} repositories`}
                 </span>
                 {selectedRepos.size > 0 && (
@@ -303,14 +298,14 @@ export function RepositorySelectPage({
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
                               <GitBranch className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
-                              <span className="font-medium text-[14px] truncate">{repo.name}</span>
+                              <span className="font-medium text-sm truncate">{repo.name}</span>
                               {isAlreadyConnected && (
-                                <Badge variant="secondary" className="text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-medium">
+                                <Badge variant="secondary" className="text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-medium">
                                   Connected
                                 </Badge>
                               )}
                             </div>
-                            <p className="text-[13px] text-muted-foreground truncate">
+                            <p className="text-sm text-muted-foreground truncate">
                               {repo.description || repo.fullName}
                             </p>
                           </div>
@@ -339,7 +334,7 @@ export function RepositorySelectPage({
                             )}
                             <div className="flex items-center gap-1">
                               <Star className="h-3 w-3" />
-                              <span className="font-variant-numeric tabular-nums">{repo.stars}</span>
+                              <span className="tabular-nums">{repo.stars}</span>
                             </div>
                             {repo.updatedAt && (
                               <div className="flex items-center gap-1">

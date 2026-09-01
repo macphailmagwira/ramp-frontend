@@ -484,7 +484,7 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full font-mono bg-background">
+    <div className="flex h-full bg-background">
 
       {/* Sidebar */}
       <div className="flex w-[280px] shrink-0 flex-col border-r border-border bg-card">

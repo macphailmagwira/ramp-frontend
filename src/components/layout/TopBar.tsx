@@ -68,16 +68,7 @@ export function TopBar({ onMenuToggle, isSidebarOpen }: TopBarProps) {
 
         {/* Right section */}
         <div className="flex items-center gap-1">
-          {/* Notifications */}
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground relative rounded-lg">
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-ramp-blue rounded-full ring-2 ring-background" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Notifications</TooltipContent>
-          </Tooltip>
+      
 
           {/* Theme Toggle */}
           <DropdownMenu>

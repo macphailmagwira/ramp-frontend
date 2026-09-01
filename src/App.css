@@ -74,7 +74,7 @@
 
 /* Gradient backgrounds */
 .gradient-ramp {
-  background: linear-gradient(135deg, rgba(79, 109, 255, 0.1) 0%, rgba(79, 109, 255, 0) 50%);
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.1) 0%, hsl(var(--primary) / 0) 50%);
 }
 
 /* Glass morphism */
@@ -102,7 +102,7 @@
 
 /* Focus ring styles */
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-ramp-blue focus:ring-offset-2 focus:ring-offset-background;
+  @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background;
 }
 
 /* Button press effect */
@@ -160,7 +160,7 @@
 
 /* Input focus styles */
 .input-focus {
-  @apply focus:ring-2 focus:ring-ramp-blue/20 focus:border-ramp-blue transition-all;
+  @apply focus:ring-2 focus:ring-ring/20 focus:border-ring transition-all;
 }
 
 /* Badge variants */
@@ -222,9 +222,9 @@
 .progress-animated {
   background: linear-gradient(
     90deg,
-    hsl(var(--ramp-blue)) 0%,
-    hsl(var(--ramp-blue-light)) 50%,
-    hsl(var(--ramp-blue)) 100%
+    hsl(var(--primary)) 0%,
+    hsl(var(--primary) / 0.7) 50%,
+    hsl(var(--primary)) 100%
   );
   background-size: 200% 100%;
   animation: progress-shine 2s linear infinite;
@@ -236,7 +236,7 @@
 }
 
 .repo-card:hover {
-  @apply border-ramp-blue/30 bg-ramp-blue/5;
+  @apply border-primary/30 bg-primary/5;
 }
 
 /* Team member row */
@@ -255,5 +255,5 @@
 
 .tab-active::after {
   content: '';
-  @apply absolute bottom-0 left-0 right-0 h-0.5 bg-ramp-blue;
+  @apply absolute bottom-0 left-0 right-0 h-0.5 bg-primary;
 }

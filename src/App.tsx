@@ -17,7 +17,7 @@ import { RepositorySelectPage } from '@/pages/RepositorySelectPage';
 import { RepositoryAnalysisPage } from '@/pages/RepositoryAnalysisPage';
 
 // Dashboard Pages
-import { OverviewPage } from '@/pages/OverviewPage';
+import { InboxPage } from '@/pages/InboxPage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { StorybookPage } from '@/pages/StorybookPage';
 import { FlowsPage } from '@/pages/FlowsPage';
@@ -268,7 +268,7 @@ function AppContent() {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-2 border-ramp-blue/30 border-t-ramp-blue rounded-full animate-spin" />
+          <div className="h-8 w-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
           <p className="text-muted-foreground text-sm">Loading...</p>
         </div>
       </div>
@@ -322,7 +322,7 @@ function AppContent() {
   const renderDashboardContent = () => {
     switch (view) {
       case 'overview':
-        return <OverviewPage repository={selectedRepository || connectedRepositories[0]} repoId={connectedRepoId} onRescan={handleRescan} />;
+        return <InboxPage />;
       case 'architecture':
         return <ArchitecturePage repoId={connectedRepoId} />;
       case 'flows':
@@ -336,7 +336,7 @@ function AppContent() {
       case 'settings':
         return <SettingsPage user={user} onLogout={handleLogout} />;
       default:
-        return <OverviewPage repository={selectedRepository || connectedRepositories[0]} repoId={connectedRepoId} onRescan={handleRescan} />;
+        return <InboxPage/>;
     }
   };
 
