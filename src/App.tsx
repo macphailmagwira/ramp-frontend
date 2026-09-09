@@ -235,16 +235,6 @@ function AppContent() {
     setView('repository-select');
   };
 
-  const handleRescan = async () => {
-    if (!connectedRepoId) return;
-    try {
-      await api.scan.rescan(connectedRepoId);
-      setView('repository-analysis');
-    } catch (err) {
-      console.error('Failed to rescan:', err);
-    }
-  };
-
   const handleNavigate = (newView: ViewState) => setView(newView);
 
   const handleCreateCategory = (label: string) => {

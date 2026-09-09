@@ -355,7 +355,7 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
               return { id: f.id, ...story };
             } catch {
               // Keep the flow clickable even if its enrichment fails
-              return { id: f.id, name: f.name, description: f.description, steps: [] } as EnrichedFlow;
+              return { id: f.id, name: f.name, description: f.description, entry_point: null, steps: [] };
             }
           })
         );

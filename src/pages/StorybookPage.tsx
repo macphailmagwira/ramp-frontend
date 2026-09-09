@@ -573,7 +573,7 @@ export function StorybookPage({ repoId }: StorybookPageProps) {
 
   const [isLoadingGraph, setIsLoadingGraph] = useState(false);
   const [isDiscovering, setIsDiscovering] = useState(false);
-  const [isEnriching, setIsEnriching] = useState(false);
+  const [isEnriching] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
