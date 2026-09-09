@@ -477,7 +477,7 @@ function DateGroup({
   return (
     <div className="mb-1">
       <p className="px-4 pb-2 pt-5 text-sm font-semibold text-foreground sm:px-6 lg:px-10">{label}</p>
-      <div>
+      <div className="flex flex-col gap-1.5">
         {items.map((item, index) =>
           expandedId === item.id ? (
             <ExpandedPanel
@@ -590,34 +590,38 @@ export function InboxPage() {
     <div className="min-h-screen w-full bg-background font-sans">
       <div className="mx-auto w-full max-w-[1800px]">
         {/* ── Tabs ── */}
-        <div className="flex items-end gap-7 overflow-x-auto border-b border-border px-4 pt-3 sm:px-6 lg:px-10">
-          {TABS.map((tab) => {
-            const count = tab.value === 'cleared' ? 0 : unreadCounts[tab.value];
-            const isActive = activeTab === tab.value;
-            return (
-              <button
-                key={tab.value}
-                onClick={() => { setActiveTab(tab.value); setExpandedId(null); }}
-                className={cn(
-                  'flex flex-col gap-1.5 border-b-2 pb-3 pt-1 text-left transition-colors',
-                  isActive ? 'border-foreground' : 'border-transparent'
-                )}
-              >
-                <span
+        <div className="px-4 pt-4 sm:px-6 lg:px-10">
+          <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-border bg-white/[0.02] p-1">
+            {TABS.map((tab) => {
+              const count = tab.value === 'cleared' ? 0 : unreadCounts[tab.value];
+              const isActive = activeTab === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => { setActiveTab(tab.value); setExpandedId(null); }}
                   className={cn(
-                    'flex items-center gap-1.5 text-sm font-semibold',
-                    isActive ? 'text-foreground' : 'text-muted-foreground'
+                    'group flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-all',
+                    isActive
+                      ? 'bg-foreground text-background shadow-sm'
+                      : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
                   )}
                 >
-                  <tab.icon className="h-3.5 w-3.5" strokeWidth={2} />
-                  {tab.label}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {count > 0 ? `${count} unread` : '\u00A0'}
-                </span>
-              </button>
-            );
-          })}
+                  <tab.icon className="h-4 w-4" strokeWidth={2} />
+                  <span className="whitespace-nowrap">{tab.label}</span>
+                  {count > 0 && (
+                    <span
+                      className={cn(
+                        'ml-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-semibold leading-none',
+                        isActive ? 'bg-background/20 text-background' : 'bg-white/[0.06] text-muted-foreground'
+                      )}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── Toolbar ── */}
