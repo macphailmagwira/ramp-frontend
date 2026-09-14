@@ -1,6 +1,10 @@
 import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository } from '@/types';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1';
+const API_BASE = import.meta.env.VITE_API_BASE;
+
+if (!API_BASE) {
+  throw new Error('VITE_API_BASE is not set. Provide it via your build environment or .env file.');
+}
 
 export const api = {
   github: {
