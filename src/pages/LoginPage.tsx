@@ -43,7 +43,6 @@ export function LoginPage({ onLogin, onNavigate }: LoginPageProps) {
     setIsLoading(true);
     try {
       const data = await api.users.login(email, password);
-      if (rememberMe) localStorage.setItem('ramp_token', data.token);
       onLogin(data.user, data.token);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');

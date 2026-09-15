@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
 import {
   Search,
   GitBranch,
@@ -40,6 +41,7 @@ interface RepositorySelectPageProps {
   onBack: () => void;
   user: User | null;
   onLogout: () => void;
+  githubConnected: boolean;
   isLoading?: boolean;
 }
 
@@ -51,6 +53,7 @@ export function RepositorySelectPage({
   onBack,
   user,
   onLogout,
+  githubConnected,
   isLoading = false,
 }: RepositorySelectPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,6 +93,10 @@ export function RepositorySelectPage({
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const handleConnectGitHub = () => {
+    window.location.href = api.github.getLoginUrl();
   };
 
   return (
@@ -213,11 +220,17 @@ export function RepositorySelectPage({
 
           {/* Available Repositories */}
           <div>
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <Github className="h-3.5 w-3.5 text-muted-foreground" />
-              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Available Repositories
-              </h2>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <div className="flex items-center gap-2">
+                <Github className="h-3.5 w-3.5 text-muted-foreground" />
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Available Repositories
+                </h2>
+              </div>
+              <Button variant="outline" size="sm" className="gap-2" onClick={handleConnectGitHub}>
+                <Github className="h-3.5 w-3.5" />
+                Connect GitHub
+              </Button>
             </div>
 
             {/* Search */}
@@ -255,14 +268,32 @@ export function RepositorySelectPage({
                     </div>
                   </div>
                 ) : filteredRepos.length === 0 ? (
-                  <div className="flex items-center justify-center h-full py-20">
-                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                  !githubConnected ? (
+                    <div className="flex flex-col items-center justify-center h-full py-16 gap-4">
                       <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center">
                         <Github className="h-6 w-6 text-muted-foreground/60" />
                       </div>
-                      <span className="text-sm">No repositories found</span>
+                      <div className="text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Connect your GitHub account</p>
+                        <p className="text-xs text-muted-foreground/70 mb-3 max-w-xs">
+                          Link GitHub to browse and connect your repositories.
+                        </p>
+                        <Button className="gap-2" onClick={handleConnectGitHub}>
+                          <Github className="h-4 w-4" />
+                          Connect GitHub
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full py-20">
+                      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                        <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center">
+                          <Github className="h-6 w-6 text-muted-foreground/60" />
+                        </div>
+                        <span className="text-sm">No repositories found</span>
+                      </div>
+                    </div>
+                  )
                 ) : (
                   <div className="divide-y divide-border/60">
                     {filteredRepos.map((repo) => {

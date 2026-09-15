@@ -139,6 +139,7 @@ export interface ApiRepository {
 export type ViewState = 
   | 'login'
   | 'signup'
+  | 'connect-github'
   | 'repository-select'
   | 'repository-analysis'
   | 'github-callback'

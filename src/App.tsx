@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import type { ViewState, Repository, User, ApiRepository, ApiConnectedRepository } from '@/types';
 import { mockTeamMembers } from '@/data/mock';
-import { api } from '@/lib/api';
+import { api, getToken, setToken } from '@/lib/api';
 
 // Layout Components
 import { Sidebar, type KnowledgeCategory } from '@/components/layout/Sidebar';
@@ -11,6 +11,7 @@ import { TopBar } from '@/components/layout/TopBar';
 // Auth Pages
 import { LoginPage } from '@/pages/LoginPage';
 import { SignupPage } from '@/pages/SignupPage';
+import { GitHubConnectPage } from '@/pages/GitHubConnectPage';
 
 // Repository Pages
 import { RepositorySelectPage } from '@/pages/RepositorySelectPage';
@@ -63,6 +64,9 @@ const toUser = (apiUser: any): User => ({
   role: 'owner' as const,
 });
 
+const connectedRepoKey = (userId?: string | null) =>
+  userId ? `ramp_connected_repo_id_${userId}` : 'ramp_connected_repo_id';
+
 function AppContent() {
   const [view, setView] = useState<ViewState>('login');
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null);
@@ -72,6 +76,7 @@ function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
+  const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [knowledgeCategories, setKnowledgeCategories] = useState<KnowledgeCategory[]>(() => [
     {
@@ -113,13 +118,22 @@ function AppContent() {
     }
   }, []);
 
-  const loadRepositories = useCallback(async () => {
+  const loadRepositories = useCallback(async (): Promise<boolean> => {
     setIsLoadingRepos(true);
     try {
       const data = await api.github.getRepositories();
       setRepositories(data.repositories.map(toRepository));
+      setGithubConnected(true);
+      return true;
     } catch (err) {
-      console.error('Failed to load repositories:', err);
+      if (err instanceof Error && err.message === 'GitHub account not connected') {
+        setRepositories([]);
+        setGithubConnected(false);
+      } else {
+        console.error('Failed to load repositories:', err);
+        setGithubConnected(false);
+      }
+      return false;
     } finally {
       setIsLoadingRepos(false);
     }
@@ -128,9 +142,18 @@ function AppContent() {
   const navigateToDashboard = useCallback(async (currentUser: User) => {
     setUser(currentUser);
     try {
+      setGithubConnected(null);
       const conns = await loadConnectedRepositories();
+      const ghConnected = await loadRepositories();
+
+      // Gate: a GitHub connection is required before anything else.
+      if (!ghConnected) {
+        setView('connect-github');
+        return;
+      }
+
       if (conns.length > 0) {
-        const savedRepoId = localStorage.getItem('ramp_connected_repo_id');
+        const savedRepoId = localStorage.getItem(connectedRepoKey(currentUser.id));
         const active = savedRepoId
           ? conns.find(r => r.id === savedRepoId)
           : conns[0];
@@ -147,39 +170,53 @@ function AppContent() {
     } finally {
       setIsAuthenticating(false);
     }
-    loadRepositories();
   }, [loadConnectedRepositories, loadRepositories]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('github') === 'connected') {
-      const savedUser = localStorage.getItem('ramp_user');
-      if (savedUser) {
-        const u = JSON.parse(savedUser);
-        navigateToDashboard(u);
+    const restoreSession = async () => {
+      const token = getToken();
+      if (!token) {
+        setIsAuthenticating(false);
+        return;
       }
-      window.history.replaceState({}, '', '/');
-    } else {
-      const savedUser = localStorage.getItem('ramp_user');
-      if (savedUser) {
-        const u = JSON.parse(savedUser);
-        setUser(u);
-        const savedRepoId = localStorage.getItem('ramp_connected_repo_id');
+      try {
+        const me = await api.users.getMe();
+        const apiUser = me?.user ?? me;
+        const u = toUser(apiUser);
+        localStorage.setItem('ramp_user', JSON.stringify(u));
+        const savedRepoId = localStorage.getItem(connectedRepoKey(u.id));
         if (savedRepoId) setConnectedRepoId(savedRepoId);
-        navigateToDashboard(u);
-      } else {
+        await navigateToDashboard(u);
+      } catch {
+        setToken(null);
         setIsAuthenticating(false);
       }
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('github') === 'connected') {
+      window.history.replaceState({}, '', '/');
+      restoreSession();
+    } else {
+      restoreSession();
     }
   }, [navigateToDashboard]);
 
-  const handleLogin = async (apiUser: any, _token: string) => {
+  useEffect(() => {
+    const handler = () => handleLogout();
+    window.addEventListener('ramp:unauthorized', handler);
+    return () => window.removeEventListener('ramp:unauthorized', handler);
+  }, []);
+
+  const handleLogin = async (apiUser: any, token: string) => {
+    setToken(token);
     const u = toUser(apiUser);
     localStorage.setItem('ramp_user', JSON.stringify(u));
     navigateToDashboard(u);
   };
 
-  const handleSignup = async (apiUser: any, _token: string) => {
+  const handleSignup = async (apiUser: any, token: string) => {
+    setToken(token);
     const u = toUser(apiUser);
     localStorage.setItem('ramp_user', JSON.stringify(u));
     navigateToDashboard(u);
@@ -192,7 +229,7 @@ function AppContent() {
     setConnectedRepoId(null);
     setSelectedRepository(null);
     localStorage.removeItem('ramp_user');
-    localStorage.removeItem('ramp_connected_repo_id');
+    localStorage.removeItem(connectedRepoKey(user?.id));
     localStorage.removeItem('ramp_token');
     setView('login');
   };
@@ -214,7 +251,7 @@ function AppContent() {
         forks_count: repo.forks,
       });
       setConnectedRepoId(response.id);
-      localStorage.setItem('ramp_connected_repo_id', response.id);
+      localStorage.setItem(connectedRepoKey(user?.id), response.id);
       setSelectedRepository(repo);
       await loadConnectedRepositories();
       setView('repository-analysis');
@@ -226,7 +263,7 @@ function AppContent() {
   const handleSwitchRepository = (repo: Repository) => {
     setSelectedRepository(repo);
     setConnectedRepoId(repo.id);
-    localStorage.setItem('ramp_connected_repo_id', repo.id);
+    localStorage.setItem(connectedRepoKey(user?.id), repo.id);
     setView('overview');
   };
 
@@ -265,6 +302,10 @@ function AppContent() {
     );
   }
 
+  if (view === 'connect-github') {
+    return <GitHubConnectPage user={user} onLogout={handleLogout} />;
+  }
+
   if (view === 'login') {
     return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
   }
@@ -282,7 +323,7 @@ function AppContent() {
         onSwitchToConnected={handleSwitchRepository}
         onBack={() => {
           if (connectedRepositories.length > 0) {
-            const savedRepoId = localStorage.getItem('ramp_connected_repo_id');
+            const savedRepoId = localStorage.getItem(connectedRepoKey(user?.id));
             const active = savedRepoId
               ? connectedRepositories.find(r => r.id === savedRepoId)
               : connectedRepositories[0];
@@ -294,6 +335,7 @@ function AppContent() {
         }}
         user={user}
         onLogout={handleLogout}
+        githubConnected={githubConnected === true}
         isLoading={isLoadingRepos}
       />
     );

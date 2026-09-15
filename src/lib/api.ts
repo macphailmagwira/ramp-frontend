@@ -6,20 +6,78 @@ if (!API_BASE) {
   throw new Error('VITE_API_BASE is not set. Provide it via your build environment or .env file.');
 }
 
+const TOKEN_KEY = 'ramp_token';
+export const UNAUTHORIZED_EVENT = 'ramp:unauthorized';
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string | null): void {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+let unauthorizedHandler: (() => void) | null = null;
+
+export function onUnauthorized(handler: () => void): void {
+  unauthorizedHandler = handler;
+}
+
+async function request<T = any>(
+  path: string,
+  options: RequestInit = {},
+  opts: { skipSessionLogout?: boolean } = {}
+): Promise<T> {
+  const headers = new Headers(options.headers);
+
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  if (options.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+  if (res.status === 401) {
+    if (opts.skipSessionLogout) {
+      // e.g. GitHub account not linked yet — not a session problem, don't log out.
+      throw new Error('GitHub account not connected');
+    }
+    setToken(null);
+    unauthorizedHandler?.();
+    throw new Error('Your session has expired. Please sign in again.');
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { detail?: string }).detail || `Request failed (${res.status})`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
 export const api = {
   github: {
-    getLoginUrl: () => `${API_BASE}/github/oauth/login`,
+    getLoginUrl: () => {
+      // Pass the Ramp JWT as the OAuth `state` so the backend callback can
+      // associate the GitHub token with the correct user (a full-page redirect
+      // from GitHub does not carry the Authorization header).
+      const token = getToken();
+      const base = `${API_BASE}/github/oauth/login`;
+      return token ? `${base}?state=${encodeURIComponent(token)}` : base;
+    },
 
     getRepositories: async (): Promise<{ repositories: ApiRepository[]; total: number }> => {
-      const res = await fetch(`${API_BASE}/github/repositories`);
-      if (!res.ok) throw new Error('Failed to fetch repositories');
-      return res.json();
+      // skipSessionLogout: a 401 here means "GitHub not linked yet", not a session
+      // problem. The caller (loadRepositories) interprets that signal.
+      return request('/github/repositories', {}, { skipSessionLogout: true });
     },
 
     connectRepository: async (repo: ApiRepository) => {
-      const res = await fetch(`${API_BASE}/github/connected-repositories`, {
+      return request('/github/connected-repositories', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           repo_id: String(repo.id),
           owner: repo.owner,
@@ -31,22 +89,16 @@ export const api = {
           description: repo.description,
         }),
       });
-      if (!res.ok) throw new Error('Failed to connect repository');
-      return res.json();
     },
 
     getConnectedRepositories: async (): Promise<ApiConnectedRepository[]> => {
-      const res = await fetch(`${API_BASE}/github/connected-repositories`);
-      if (!res.ok) throw new Error('Failed to fetch connected repositories');
-      return res.json();
+      return request('/github/connected-repositories');
     },
   },
 
   architecture: {
     getGraph: async (repoId: string) => {
-      const res = await fetch(`${API_BASE}/github/${repoId}/architecture`);
-      if (!res.ok) throw new Error('Failed to fetch architecture');
-      return res.json();
+      return request(`/github/${repoId}/architecture`);
     },
   },
 
@@ -66,11 +118,8 @@ export const api = {
       if (params?.feature_name) query.set('feature_name', params.feature_name);
       if (params?.max_depth) query.set('max_depth', String(params.max_depth));
 
-      const res = await fetch(
-        `${API_BASE}/github/${repoId}/flow${query.toString() ? `?${query}` : ''}`
-      );
-      if (!res.ok) throw new Error('Failed to fetch flow');
-      return res.json();
+      const qs = query.toString();
+      return request(`/github/${repoId}/flow${qs ? `?${qs}` : ''}`);
     },
   },
 
@@ -80,13 +129,10 @@ export const api = {
       files: string[],
       edges: { source: string; target: string; weight: number }[]
     ) => {
-      const res = await fetch(`${API_BASE}/ai/architecture-story`, {
+      return request('/ai/architecture-story', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_id: repoId, files, edges }),
       });
-      if (!res.ok) throw new Error('Failed to generate story');
-      return res.json();
     },
 
     generateFlowStory: async (payload: {
@@ -95,13 +141,10 @@ export const api = {
       function_nodes: ApiFlowNode[];
       function_edges: ApiFlowEdge[];
     }): Promise<FlowStoryResponse> => {
-      const res = await fetch(`${API_BASE}/ai/flow-story`, {
+      return request('/ai/flow-story', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Failed to generate flow story');
-      return res.json();
     },
 
     discoverFlows: async (payload: {
@@ -109,13 +152,10 @@ export const api = {
       function_nodes: ApiFlowNode[];
       function_edges: ApiFlowEdge[];
     }): Promise<DiscoverFlowsResponse> => {
-      const res = await fetch(`${API_BASE}/ai/discover-flows`, {
+      return request('/ai/discover-flows', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Failed to discover flows');
-      return res.json();
     },
 
     enrichFlow: async (payload: {
@@ -124,21 +164,16 @@ export const api = {
       function_nodes: ApiFlowNode[];
       function_edges: ApiFlowEdge[];
     }): Promise<FlowStoryResponse> => {
-      const res = await fetch(`${API_BASE}/ai/enrich-flow`, {
+      return request('/ai/enrich-flow', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Failed to enrich flow');
-      return res.json();
     },
   },
 
   users: {
-    getMe: async () => {
-      const res = await fetch(`${API_BASE}/users`);
-      if (!res.ok) throw new Error('Failed to fetch user');
-      return res.json();
+    getMe: async (): Promise<any> => {
+      return request('/users');
     },
 
     login: async (email: string, password: string) => {
@@ -173,30 +208,22 @@ export const api = {
       const params = new URLSearchParams();
       if (since) params.set('since', since);
       if (until) params.set('until', until);
-      const url = `${API_BASE}/github/${repoId}/overview${params.toString() ? `?${params}` : ''}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to fetch overview');
-      return res.json();
+      const qs = params.toString();
+      return request(`/github/${repoId}/overview${qs ? `?${qs}` : ''}`);
     },
   },
 
   scan: {
     getStatus: async (repoId: string) => {
-      const res = await fetch(`${API_BASE}/github/${repoId}/scan-status`);
-      if (!res.ok) throw new Error('Failed to fetch scan status');
-      return res.json();
+      return request(`/github/${repoId}/scan-status`);
     },
 
     rescan: async (repoId: string) => {
-      const res = await fetch(`${API_BASE}/github/${repoId}/rescan`, { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to trigger rescan');
-      return res.json();
+      return request(`/github/${repoId}/rescan`, { method: 'POST' });
     },
 
     getSyncStatus: async (repoId: string) => {
-      const res = await fetch(`${API_BASE}/github/${repoId}/sync-status`);
-      if (!res.ok) throw new Error('Failed to fetch sync status');
-      return res.json();
+      return request(`/github/${repoId}/sync-status`);
     },
   },
 };
