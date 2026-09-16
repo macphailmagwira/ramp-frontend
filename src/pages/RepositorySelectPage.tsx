@@ -227,10 +227,12 @@ export function RepositorySelectPage({
                   Available Repositories
                 </h2>
               </div>
-              <Button variant="outline" size="sm" className="gap-2" onClick={handleConnectGitHub}>
-                <Github className="h-3.5 w-3.5" />
-                Connect GitHub
-              </Button>
+              {!githubConnected && (
+                <Button variant="outline" size="sm" className="gap-2" onClick={handleConnectGitHub}>
+                  <Github className="h-3.5 w-3.5" />
+                  Connect GitHub
+                </Button>
+              )}
             </div>
 
             {/* Search */}
