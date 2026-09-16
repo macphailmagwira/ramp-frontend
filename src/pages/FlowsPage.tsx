@@ -33,8 +33,8 @@ interface FlowsPageProps {
 // ─── Palettes ─────────────────────────────────────────────────────────────────
 
 const PALETTES = {
-  function: { bg: 'rgba(59,130,246,0.12)', bgL: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.6)', borderL: 'rgba(59,130,246,0.35)', glow: 'rgba(59,130,246,0.35)', text: '#93c5fd', textL: '#1d4ed8', dot: '#3b82f6' },
-  method:   { bg: 'rgba(59,130,246,0.12)', bgL: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.6)', borderL: 'rgba(59,130,246,0.35)', glow: 'rgba(59,130,246,0.35)', text: '#93c5fd', textL: '#1d4ed8', dot: '#3b82f6' },
+  function: { bg: 'rgba(156,163,175,0.12)', bgL: 'rgba(156,163,175,0.08)', border: 'rgba(156,163,175,0.6)', borderL: 'rgba(156,163,175,0.35)', glow: 'rgba(156,163,175,0.35)', text: '#d1d5db', textL: '#6b7280', dot: '#9ca3af' },
+  method:   { bg: 'rgba(156,163,175,0.12)', bgL: 'rgba(156,163,175,0.08)', border: 'rgba(156,163,175,0.6)', borderL: 'rgba(156,163,175,0.35)', glow: 'rgba(156,163,175,0.35)', text: '#d1d5db', textL: '#6b7280', dot: '#9ca3af' },
   service:  { bg: 'rgba(16,185,129,0.12)', bgL: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.6)', borderL: 'rgba(16,185,129,0.35)', glow: 'rgba(16,185,129,0.35)', text: '#6ee7b7', textL: '#065f46', dot: '#10b981' },
   database: { bg: 'rgba(168,85,247,0.12)', bgL: 'rgba(168,85,247,0.08)', border: 'rgba(168,85,247,0.6)', borderL: 'rgba(168,85,247,0.35)', glow: 'rgba(168,85,247,0.35)', text: '#d8b4fe', textL: '#6b21a8', dot: '#a855f7' },
   external: { bg: 'rgba(245,158,11,0.12)', bgL: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.6)', borderL: 'rgba(245,158,11,0.35)', glow: 'rgba(245,158,11,0.35)', text: '#fcd34d', textL: '#92400e', dot: '#f59e0b' },
@@ -166,7 +166,7 @@ function LoadingOverlay({ message }: { message: string }) {
       <div className="mb-2.5 text-base font-bold text-foreground">{message}</div>
       <div style={{ opacity: vis ? 1 : 0 }} className="text-xs text-muted-foreground transition-opacity duration-[400ms]">{LOADING_PHRASES[idx]}</div>
       <div className="mt-7 h-0.5 w-[180px] overflow-hidden rounded-full bg-border/10">
-        <div className="h-full w-full animate-pulse-glow rounded-full bg-gradient-to-r from-ramp-blue to-[#a855f7]" />
+        <div className="h-full w-full animate-pulse-glow rounded-full bg-gradient-to-r from-foreground/70 to-muted-foreground" />
       </div>
     </div>
   );
@@ -509,7 +509,7 @@ export function FlowsPage({ repoId }: FlowsPageProps) {
               size="icon"
               onClick={handleSearch}
               disabled={isWorking || !searchQuery.trim() || !fullGraph}
-              className="h-9 w-9 shrink-0 bg-ramp-blue text-white hover:bg-ramp-blue-dark"
+              className="h-9 w-9 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {isSearching ? <Spinner className="h-4 w-4" /> : <Search className="h-4 w-4" />}
             </Button>

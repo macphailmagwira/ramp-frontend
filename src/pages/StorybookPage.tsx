@@ -802,7 +802,7 @@ export function StorybookPage({ repoId }: StorybookPageProps) {
               size="icon"
               onClick={handleSearch}
               disabled={isWorking || !searchQuery.trim() || !fullGraph}
-              className="h-9 w-9 shrink-0 bg-ramp-blue shadow-glow-sm hover:bg-ramp-blue-dark"
+              className="h-9 w-9 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {isSearching
                 ? <Spinner className="size-4" />

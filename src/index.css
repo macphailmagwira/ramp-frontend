@@ -15,36 +15,37 @@
     --popover-foreground: 222 25% 9%;
     --primary: 222 25% 9%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 227 100% 65%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96.5%;
+    --secondary-foreground: 222 25% 9%;
     --muted: 220 16% 96.5%;
     --muted-foreground: 220 10% 44%;
-    --accent: 227 100% 65%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 220 14% 94%;
+    --accent-foreground: 222 25% 9%;
     --destructive: 0 80% 58%;
     --destructive-foreground: 0 0% 98%;
     --border: 220 14% 90.5%;
     --input: 220 14% 90.5%;
-    --ring: 227 100% 65%;
+    --ring: 222 25% 9%;
     --radius: 0.75rem;
 
     /* Sidebar */
     --sidebar-background: 220 16% 97.5%;
     --sidebar-foreground: 222 25% 9%;
-    --sidebar-primary: 227 100% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: 222 25% 9%;
+    --sidebar-primary-foreground: 0 0% 98%;
     --sidebar-accent: 220 16% 94%;
     --sidebar-accent-foreground: 222 25% 9%;
     --sidebar-border: 220 14% 90.5%;
-    --sidebar-ring: 227 100% 65%;
+    --sidebar-ring: 222 25% 9%;
 
-    /* Custom Ramp colors */
+    /* Custom Ramp colors — neutral gray (no blue accent) */
     --ramp-bg: 220 20% 98.5%;
     --ramp-bg-secondary: 220 16% 96.5%;
     --ramp-text: 222 25% 9%;
     --ramp-text-secondary: 220 10% 44%;
-    --ramp-blue: 227 100% 65%;
-    --ramp-blue-light: 227 100% 96%;
+    --ramp-blue: 220 13% 28%;
+    --ramp-blue-dark: 220 10% 18%;
+    --ramp-blue-light: 220 16% 94%;
     --ramp-border: 220 14% 90.5%;
 
     /* Elevation (light) */
@@ -65,35 +66,36 @@
     --popover-foreground: 220 20% 96%;
     --primary: 220 20% 96%;
     --primary-foreground: 222 26% 4.5%;
-    --secondary: 227 100% 65%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 220 16% 14%;
+    --secondary-foreground: 220 20% 96%;
     --muted: 220 16% 12%;
     --muted-foreground: 220 10% 58%;
-    --accent: 227 100% 65%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 220 16% 13%;
+    --accent-foreground: 220 20% 96%;
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 98%;
     --border: 220 15% 14%;
     --input: 220 15% 16%;
-    --ring: 227 100% 65%;
+    --ring: 220 20% 96%;
 
     /* Sidebar dark */
     --sidebar-background: 222 24% 5.5%;
     --sidebar-foreground: 220 20% 96%;
-    --sidebar-primary: 227 100% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: 220 20% 96%;
+    --sidebar-primary-foreground: 222 26% 4.5%;
     --sidebar-accent: 220 16% 11%;
     --sidebar-accent-foreground: 220 20% 96%;
     --sidebar-border: 220 15% 13%;
-    --sidebar-ring: 227 100% 65%;
+    --sidebar-ring: 220 20% 96%;
 
-    /* Custom Ramp colors dark */
+    /* Custom Ramp colors dark — neutral gray (no blue accent) */
     --ramp-bg: 222 26% 4.5%;
     --ramp-bg-secondary: 222 22% 6.5%;
     --ramp-text: 220 20% 96%;
     --ramp-text-secondary: 220 10% 58%;
-    --ramp-blue: 227 100% 65%;
-    --ramp-blue-dark: 227 70% 45%;
+    --ramp-blue: 220 14% 80%;
+    --ramp-blue-dark: 220 16% 68%;
+    --ramp-blue-light: 220 16% 18%;
     --ramp-border: 220 15% 14%;
 
     /* Elevation (dark) */
@@ -141,7 +143,7 @@
   }
 
   .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#4F6DFF] to-[#7B8FFF];
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-foreground to-muted-foreground;
   }
 
   .glass {
@@ -160,7 +162,7 @@
   }
 
   .glow-blue {
-    box-shadow: 0 0 40px rgba(79, 109, 255, 0.3);
+    box-shadow: 0 0 40px rgba(15, 23, 42, 0.14);
   }
 
   .text-secondary {
@@ -214,12 +216,12 @@
 
 /* Selection */
 ::selection {
-  @apply bg-[#4F6DFF]/25;
+  @apply bg-foreground/15;
 }
 
 /* Focus styles */
 *:focus-visible {
-  @apply outline-none ring-2 ring-[#4F6DFF]/70 ring-offset-2 ring-offset-background;
+  @apply outline-none ring-2 ring-ring/60 ring-offset-2 ring-offset-background;
 }
 
 /* Animation utilities */

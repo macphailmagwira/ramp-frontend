@@ -56,13 +56,31 @@ const toConnectedRepository = (r: ApiConnectedRepository): Repository => ({
   analysisProgress: 0,
 });
 
-const toUser = (apiUser: any): User => ({
-  id: String(apiUser.id),
-  name: `${apiUser.first_name} ${apiUser.last_name}`.trim(),
-  email: apiUser.email,
-  avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiUser.email}`,
-  role: 'owner' as const,
-});
+const toUser = (apiUser: any): User => {
+  // getMe derives the user from the Bearer token. GitHub-sourced accounts have
+  // no first_name/last_name; their identity lives under `github.github_username`.
+  const gh = apiUser.github ?? {};
+  const full = `${apiUser.first_name ?? ''} ${apiUser.last_name ?? ''}`.trim();
+  const name =
+    full ||
+    gh.github_username ||
+    gh.login ||
+    (apiUser.email ? apiUser.email.split('@')[0] : '') ||
+    'User';
+
+  const email = apiUser.email ?? '';
+  const id = String(apiUser.id ?? '');
+
+  return {
+    id,
+    name,
+    email,
+    avatar:
+      apiUser.avatar ||
+      `https://api.dicebear.com/7.x/avataaars/svg?seed=${email || id || 'user'}`,
+    role: 'owner' as const,
+  };
+};
 
 const connectedRepoKey = (userId?: string | null) =>
   userId ? `ramp_connected_repo_id_${userId}` : 'ramp_connected_repo_id';
@@ -173,6 +191,17 @@ function AppContent() {
   }, [loadConnectedRepositories, loadRepositories]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    // The backend hands the app JWT back via the GitHub OAuth callback
+    // redirect (?github=connected&token=<jwt>), since a server-side redirect
+    // cannot set localStorage. Capture and persist it before restoring.
+    const callbackToken = params.get('token');
+    if (callbackToken) {
+      setToken(callbackToken);
+      window.history.replaceState({}, '', '/');
+    }
+
     const restoreSession = async () => {
       const token = getToken();
       if (!token) {
@@ -193,13 +222,10 @@ function AppContent() {
       }
     };
 
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('github') === 'connected') {
+    if (params.get('github') === 'connected' && !callbackToken) {
       window.history.replaceState({}, '', '/');
-      restoreSession();
-    } else {
-      restoreSession();
     }
+    restoreSession();
   }, [navigateToDashboard]);
 
   useEffect(() => {

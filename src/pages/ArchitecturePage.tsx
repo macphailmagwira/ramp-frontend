@@ -45,7 +45,7 @@ interface FolderBoundary {
 const PAGE_SIZE = 14;
 
 const NODE_PALETTES = [
-  { bg: 'rgba(59,130,246,0.13)', bgLight: 'rgba(59,130,246,0.07)', border: 'rgba(59,130,246,0.55)', borderLight: 'rgba(59,130,246,0.3)', glow: 'rgba(59,130,246,0.3)', text: '#93c5fd', textLight: '#1d4ed8', dot: '#3b82f6' },
+  { bg: 'rgba(156,163,175,0.13)', bgLight: 'rgba(156,163,175,0.07)', border: 'rgba(156,163,175,0.55)', borderLight: 'rgba(156,163,175,0.3)', glow: 'rgba(156,163,175,0.3)', text: '#d1d5db', textLight: '#6b7280', dot: '#9ca3af' },
   { bg: 'rgba(16,185,129,0.13)', bgLight: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.55)', borderLight: 'rgba(16,185,129,0.3)', glow: 'rgba(16,185,129,0.3)', text: '#6ee7b7', textLight: '#065f46', dot: '#10b981' },
   { bg: 'rgba(245,158,11,0.13)', bgLight: 'rgba(245,158,11,0.07)', border: 'rgba(245,158,11,0.55)', borderLight: 'rgba(245,158,11,0.3)', glow: 'rgba(245,158,11,0.3)', text: '#fcd34d', textLight: '#92400e', dot: '#f59e0b' },
   { bg: 'rgba(239,68,68,0.13)',  bgLight: 'rgba(239,68,68,0.07)',  border: 'rgba(239,68,68,0.55)',  borderLight: 'rgba(239,68,68,0.3)',  glow: 'rgba(239,68,68,0.3)',  text: '#fca5a5', textLight: '#991b1b', dot: '#ef4444' },
@@ -63,7 +63,7 @@ interface FolderPaletteEntry {
 }
 
 const FOLDER_PALETTES: FolderPaletteEntry[] = [
-  { fill: 'rgba(59,130,246,0.05)',  stroke: 'rgba(59,130,246,0.28)',  label: 'rgba(59,130,246,0.95)',  labelBg: 'rgba(59,130,246,0.13)',  labelBorder: 'rgba(59,130,246,0.35)'  },
+  { fill: 'rgba(156,163,175,0.05)',  stroke: 'rgba(156,163,175,0.28)',  label: 'rgba(156,163,175,0.95)',  labelBg: 'rgba(156,163,175,0.13)',  labelBorder: 'rgba(156,163,175,0.35)'  },
   { fill: 'rgba(16,185,129,0.05)',  stroke: 'rgba(16,185,129,0.28)',  label: 'rgba(16,185,129,0.95)',  labelBg: 'rgba(16,185,129,0.13)',  labelBorder: 'rgba(16,185,129,0.35)'  },
   { fill: 'rgba(245,158,11,0.05)',  stroke: 'rgba(245,158,11,0.28)',  label: 'rgba(245,158,11,0.95)',  labelBg: 'rgba(245,158,11,0.13)',  labelBorder: 'rgba(245,158,11,0.35)'  },
   { fill: 'rgba(168,85,247,0.05)',  stroke: 'rgba(168,85,247,0.28)',  label: 'rgba(168,85,247,0.95)',  labelBg: 'rgba(168,85,247,0.13)',  labelBorder: 'rgba(168,85,247,0.35)'  },
@@ -377,7 +377,7 @@ function SectionNavigator({
   if (!current) return null;
   const total = sections.length;
 
-  const depthColors = ['#3b82f6', '#a855f7', '#10b981', '#f59e0b', '#ec4899', '#14b8a6', '#ef4444'];
+  const depthColors = ['#9ca3af', '#a855f7', '#10b981', '#f59e0b', '#ec4899', '#14b8a6', '#ef4444'];
   const colorFor = (depth: number) => depthColors[depth % depthColors.length];
   const currentColor = colorFor(current.depth);
 
@@ -534,16 +534,16 @@ function CinematicLoader({ isDark }: { isDark: boolean }) {
     <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: isDark ? '#0a0d12' : '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ position: 'relative', width: 80, height: 80, marginBottom: 32 }}>
         {[0, 8, 16].map((inset, i) => (
-          <div key={i} style={{ position: 'absolute', inset, borderRadius: '50%', border: `1px solid rgba(59,130,246,${0.15 + i * 0.1})`, animation: `story-ping 2s ease-out infinite ${i * 0.4}s` }} />
+          <div key={i} style={{ position: 'absolute', inset, borderRadius: '50%', border: `1px solid rgba(156,163,175,${0.15 + i * 0.1})`, animation: `story-ping 2s ease-out infinite ${i * 0.4}s` }} />
         ))}
-        <div style={{ position: 'absolute', inset: 24, borderRadius: '50%', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Sparkles style={{ width: 16, height: 16, color: '#60a5fa' }} />
+        <div style={{ position: 'absolute', inset: 24, borderRadius: '50%', background: 'rgba(156,163,175,0.15)', border: '1px solid rgba(156,163,175,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Sparkles style={{ width: 16, height: 16, color: '#9ca3af' }} />
         </div>
       </div>
       <div style={{ fontSize: 18, fontWeight: 700, color: isDark ? '#e2e8f0' : '#0f172a', letterSpacing: '-0.03em', marginBottom: 12 }}>Analysing your codebase</div>
       <div style={{ fontSize: 13, color: isDark ? '#475569' : '#64748b', opacity: visible ? 1 : 0, transition: 'opacity 0.4s ease', minHeight: 20 }}>{CINEMATIC_PHRASES[phraseIdx]}</div>
       <div style={{ width: 200, height: 2, background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', borderRadius: 2, marginTop: 32, overflow: 'hidden' }}>
-        <div style={{ height: '100%', background: 'linear-gradient(90deg,#3b82f6,#a855f7)', borderRadius: 2, animation: 'story-progress 8s linear forwards' }} />
+        <div style={{ height: '100%', background: 'linear-gradient(90deg,#9ca3af,#a855f7)', borderRadius: 2, animation: 'story-progress 8s linear forwards' }} />
       </div>
     </div>
   );
@@ -584,8 +584,8 @@ function StoryCard({ story, step, total, onPrev, onNext, onExit, isDark }: {
       borderRadius: 20,
       backdropFilter: 'blur(24px)',
       boxShadow: isDark
-        ? '0 0 0 1px rgba(59,130,246,0.12), 0 32px 64px rgba(0,0,0,0.8), 0 0 120px rgba(59,130,246,0.06)'
-        : '0 0 0 1px rgba(59,130,246,0.08), 0 32px 64px rgba(0,0,0,0.12)',
+        ? '0 0 0 1px rgba(156,163,175,0.12), 0 32px 64px rgba(0,0,0,0.8), 0 0 120px rgba(156,163,175,0.06)'
+        : '0 0 0 1px rgba(156,163,175,0.08), 0 32px 64px rgba(0,0,0,0.12)',
       animation: 'story-slide-up 0.35s cubic-bezier(0.34,1.56,0.64,1)',
       overflow: 'hidden',
       fontFamily: "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji'",
@@ -593,9 +593,9 @@ function StoryCard({ story, step, total, onPrev, onNext, onExit, isDark }: {
       <div style={{ height: 3, background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)' }}>
         <div style={{
           height: '100%', width: `${progress}%`,
-          background: 'linear-gradient(90deg, #3b82f6, #a855f7)',
+          background: 'linear-gradient(90deg, #9ca3af, #a855f7)',
           borderRadius: 2, transition: 'width 0.4s cubic-bezier(0.4,0,0.2,1)',
-          boxShadow: '0 0 8px rgba(59,130,246,0.6)',
+          boxShadow: '0 0 8px rgba(156,163,175,0.6)',
         }} />
       </div>
 
@@ -606,13 +606,13 @@ function StoryCard({ story, step, total, onPrev, onNext, onExit, isDark }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 28, height: 28, borderRadius: 8,
-            background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
+            background: 'rgba(156,163,175,0.15)', border: '1px solid rgba(156,163,175,0.3)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <BookOpen style={{ width: 13, height: 13, color: '#60a5fa' }} />
+            <BookOpen style={{ width: 13, height: 13, color: '#9ca3af' }} />
           </div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Guided Tour</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Guided Tour</div>
             <div style={{ fontSize: 11, color: labelColor, marginTop: 1 }}>Step {step + 1} of {total} · {Math.round(progress)}% complete</div>
           </div>
         </div>
@@ -621,7 +621,7 @@ function StoryCard({ story, step, total, onPrev, onNext, onExit, isDark }: {
           {total <= 12 && Array.from({ length: total }).map((_, i) => (
             <div key={i} style={{
               width: i === step ? 18 : 6, height: 6, borderRadius: 3,
-              background: i === step ? '#3b82f6' : i < step ? 'rgba(59,130,246,0.4)' : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'),
+              background: i === step ? '#9ca3af' : i < step ? 'rgba(156,163,175,0.4)' : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'),
               transition: 'all 0.3s cubic-bezier(0.34,1.56,0.64,1)', flexShrink: 0,
             }} />
           ))}
@@ -645,8 +645,8 @@ function StoryCard({ story, step, total, onPrev, onNext, onExit, isDark }: {
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, marginBottom: 12,
-              background: 'rgba(59,130,246,0.12)', color: '#60a5fa',
-              border: '1px solid rgba(59,130,246,0.25)', textTransform: 'uppercase', letterSpacing: '0.08em',
+              background: 'rgba(156,163,175,0.12)', color: '#9ca3af',
+              border: '1px solid rgba(156,163,175,0.25)', textTransform: 'uppercase', letterSpacing: '0.08em',
             }}>
               <Sparkles style={{ width: 9, height: 9 }} />
               {current.insight}
@@ -661,10 +661,10 @@ function StoryCard({ story, step, total, onPrev, onNext, onExit, isDark }: {
           {step === 0 && story.summary && (
             <div style={{
               marginTop: 14, padding: '10px 14px', borderRadius: 10,
-              background: isDark ? 'rgba(59,130,246,0.06)' : 'rgba(59,130,246,0.04)',
-              border: '1px solid rgba(59,130,246,0.15)',
+              background: isDark ? 'rgba(156,163,175,0.06)' : 'rgba(156,163,175,0.04)',
+              border: '1px solid rgba(156,163,175,0.15)',
             }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>Overview</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>Overview</div>
               <div style={{ fontSize: 12, color: descColor, lineHeight: 1.65 }}>{story.summary}</div>
             </div>
           )}
@@ -712,7 +712,7 @@ function StoryCard({ story, step, total, onPrev, onNext, onExit, isDark }: {
                       border: `1px solid ${divider}`,
                     }}>
                       <span style={{ color: isDark ? '#94a3b8' : '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 70 }}>{src.split('/').pop()}</span>
-                      <ArrowRight style={{ width: 9, height: 9, flexShrink: 0, color: '#3b82f6' }} />
+                      <ArrowRight style={{ width: 9, height: 9, flexShrink: 0, color: '#9ca3af' }} />
                       <span style={{ color: isDark ? '#94a3b8' : '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 70 }}>{tgt.split('/').pop()}</span>
                     </div>
                   ))}
@@ -745,9 +745,9 @@ function StoryCard({ story, step, total, onPrev, onNext, onExit, isDark }: {
           <button onClick={step === total - 1 ? onExit : onNext} style={{
             display: 'flex', alignItems: 'center', gap: 5, padding: '7px 18px', borderRadius: 8,
             border: 'none',
-            background: step === total - 1 ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #3b82f6, #6366f1)',
+            background: step === total - 1 ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #9ca3af, #6b7280)',
             color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700,
-            boxShadow: step === total - 1 ? '0 4px 16px rgba(16,185,129,0.35)' : '0 4px 16px rgba(59,130,246,0.35)',
+            boxShadow: step === total - 1 ? '0 4px 16px rgba(16,185,129,0.35)' : '0 4px 16px rgba(156,163,175,0.35)',
             transition: 'all 0.2s',
           }}>
             {step === total - 1 ? <>Done ✓</> : <><span>Next step</span><ChevronRight style={{ width: 14, height: 14 }} /></>}
@@ -840,7 +840,7 @@ function StoryGraph({ step, allFileNodes, allFileEdges, isDark, hoveredStoryNode
       style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: 'grab', userSelect: 'none', opacity: visible ? 1 : 0, transition: 'opacity 0.35s ease', background: bg }}
     >
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: `radial-gradient(circle, ${dotGrid} 1px, transparent 1px)`, backgroundSize: '28px 28px', backgroundPosition: `${position.x % 28}px ${position.y % 28}px` }} />
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: isDark ? 'radial-gradient(ellipse at 50% 40%, rgba(59,130,246,0.04) 0%, transparent 70%)' : 'radial-gradient(ellipse at 50% 40%, rgba(59,130,246,0.03) 0%, transparent 70%)' }} />
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: isDark ? 'radial-gradient(ellipse at 50% 40%, rgba(156,163,175,0.04) 0%, transparent 70%)' : 'radial-gradient(ellipse at 50% 40%, rgba(156,163,175,0.03) 0%, transparent 70%)' }} />
 
       {stepNodes.length === 0 && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1042,14 +1042,14 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
     bg: isDark ? '#0a0d12' : '#f8fafc',
     headerBorder: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
     headerBg: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
-    iconBg: isDark ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.1)',
-    iconBorder: isDark ? 'rgba(59,130,246,0.3)' : 'rgba(59,130,246,0.2)',
+    iconBg: isDark ? 'rgba(156,163,175,0.15)' : 'rgba(156,163,175,0.1)',
+    iconBorder: isDark ? 'rgba(156,163,175,0.3)' : 'rgba(156,163,175,0.2)',
     title: isDark ? '#e2e8f0' : '#0f172a',
     sub: isDark ? '#475569' : '#64748b',
     toggleBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)',
     toggleBg: isDark ? 'rgba(255,255,255,0.03)' : '#fff',
-    activeTabBg: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
-    activeTabColor: isDark ? '#93c5fd' : '#1d4ed8',
+    activeTabBg: isDark ? 'rgba(156,163,175,0.2)' : 'rgba(156,163,175,0.1)',
+    activeTabColor: isDark ? '#d1d5db' : '#6b7280',
     inactiveTabColor: isDark ? '#64748b' : '#94a3b8',
     btnBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)',
     btnBg: isDark ? 'rgba(255,255,255,0.03)' : '#fff',
@@ -1253,7 +1253,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: `1px solid ${T.headerBorder}`, background: T.headerBg, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.iconBg, border: `1px solid ${T.iconBorder}` }}>
-            <Network style={{ width: 16, height: 16, color: '#60a5fa' }} />
+            <Network style={{ width: 16, height: 16, color: '#9ca3af' }} />
           </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 600, color: T.title, letterSpacing: '-0.02em' }}>
@@ -1274,7 +1274,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {graph && !inStoryMode && (
             <button onClick={startStory} disabled={storyLoading}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(59,130,246,0.4)', background: 'rgba(59,130,246,0.1)', color: '#60a5fa', cursor: storyLoading ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, transition: 'all 0.15s' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(156,163,175,0.4)', background: 'rgba(156,163,175,0.1)', color: '#9ca3af', cursor: storyLoading ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, transition: 'all 0.15s' }}>
               <Sparkles style={{ width: 13, height: 13 }} />
               {storyLoading ? 'Generating…' : 'Guided Tour'}
             </button>
@@ -1345,7 +1345,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
               {loading && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ width: 32, height: 32, border: '2px solid rgba(59,130,246,0.25)', borderTopColor: '#3b82f6', borderRadius: '50%', margin: '0 auto 12px', animation: 'arch-spin 0.8s linear infinite' }} />
+                    <div style={{ width: 32, height: 32, border: '2px solid rgba(156,163,175,0.25)', borderTopColor: '#9ca3af', borderRadius: '50%', margin: '0 auto 12px', animation: 'arch-spin 0.8s linear infinite' }} />
                     <div style={{ fontSize: 12, color: T.sub }}>Building dependency graph…</div>
                   </div>
                 </div>
@@ -1447,14 +1447,14 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                         <div style={{
                           width: 14, height: 10, borderRadius: 3,
-                          border: '1px dashed rgba(59,130,246,0.5)',
-                          background: 'rgba(59,130,246,0.06)',
+                          border: '1px dashed rgba(156,163,175,0.5)',
+                          background: 'rgba(156,163,175,0.06)',
                           flexShrink: 0,
                         }} />
                         <span style={{ fontSize: 11, color: T.sub }}>Folder group</span>
                       </div>
                     )}
-                    {[{ label: 'Focused', color: '#3b82f6' }, { label: 'Connected', color: '#a855f7' }, { label: 'Active edge', color: '#10b981' }].map(it => (
+                    {[{ label: 'Focused', color: '#9ca3af' }, { label: 'Connected', color: '#a855f7' }, { label: 'Active edge', color: '#10b981' }].map(it => (
                       <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ width: 6, height: 6, borderRadius: '50%', background: it.color, boxShadow: `0 0 4px ${it.color}` }} />
                         <span style={{ fontSize: 11, color: T.sub }}>{it.label}</span>

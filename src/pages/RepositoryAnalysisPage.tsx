@@ -142,7 +142,7 @@ export function RepositoryAnalysisPage({ repository, repoId, onComplete }: Repos
           <h1 className="font-heading text-3xl font-bold mb-2 tracking-tight">Scan failed</h1>
           <p className="text-muted-foreground mb-8">{error}</p>
           <Button
-            className="bg-ramp-blue text-white hover:bg-ramp-blue-dark shadow-sm hover:shadow-glow-sm"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
             onClick={onComplete}
           >
             Go to overview
@@ -163,8 +163,8 @@ export function RepositoryAnalysisPage({ repository, repoId, onComplete }: Repos
       <div className="relative w-full max-w-xl animate-fade-in-up">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-ramp-blue shadow-glow mb-6">
-            <Zap className="h-8 w-8 text-white" strokeWidth={2} />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-primary-foreground shadow-sm mb-6">
+            <Zap className="h-8 w-8" strokeWidth={2} />
           </div>
           <h1 className="font-heading text-3xl font-bold mb-2 tracking-tight">
             Analyzing repository
@@ -200,7 +200,7 @@ export function RepositoryAnalysisPage({ repository, repoId, onComplete }: Repos
                 key={step.id}
                 className={cn(
                   '!p-0 rounded-xl border transition-all duration-300',
-                  isActive && 'border-ramp-blue/40 bg-ramp-blue/[0.06] shadow-glow-sm',
+                  isActive && 'border-foreground/15 bg-foreground/[0.04]',
                   isCompleted && 'border-emerald-500/25 bg-emerald-500/[0.04]',
                   !isActive && !isCompleted && 'border-border/70 bg-card/60'
                 )}

@@ -222,7 +222,7 @@ export function SettingsPage({ user }: SettingsPageProps) {
                     'gap-1.5 text-sm h-9 transition-all',
                     saved
                       ? 'bg-emerald-600 hover:bg-emerald-600 text-white'
-                      : 'bg-ramp-blue hover:bg-ramp-blue-dark text-white'
+                      : 'bg-primary text-primary-foreground hover:bg-primary/90'
                   )}
                   onClick={handleSave}
                   disabled={isSaving}
@@ -393,13 +393,13 @@ export function SettingsPage({ user }: SettingsPageProps) {
                       className={cn(
                         'relative flex flex-col items-center gap-2.5 py-5 px-3 rounded-xl border text-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ramp-blue',
                         active
-                          ? 'border-ramp-blue bg-ramp-blue/5'
+                          ? 'border-primary bg-primary/5'
                           : 'border-border hover:border-muted-foreground/40 hover:bg-muted/40'
                       )}
                     >
                       {active && (
-                        <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-ramp-blue flex items-center justify-center">
-                          <Check className="w-2.5 h-2.5 text-white" />
+                         <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                           <Check className="w-2.5 h-2.5 text-primary-foreground" />
                         </span>
                       )}
                       <Icon

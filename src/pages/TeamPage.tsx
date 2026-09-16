@@ -138,7 +138,7 @@ function RolePicker({
             className={cn(
               'p-3 rounded-lg border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ramp-blue',
               active
-                ? 'border-ramp-blue bg-ramp-blue/5 shadow-[0_0_0_1px_var(--color-ramp-blue,#3b82f6)]'
+                ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_var(--color-ramp-blue,#9ca3af)]'
                 : 'border-border hover:border-muted-foreground/40 hover:bg-muted/50'
             )}
           >
@@ -198,7 +198,7 @@ export function TeamPage({ members }: TeamPageProps) {
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-ramp-blue hover:bg-ramp-blue-dark text-white gap-1.5 shrink-0">
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 shrink-0">
                 <Plus className="h-3.5 w-3.5" />
                 Invite member
               </Button>
@@ -265,7 +265,7 @@ export function TeamPage({ members }: TeamPageProps) {
                   Cancel
                 </Button>
                 <Button
-                  className="bg-ramp-blue hover:bg-ramp-blue-dark text-white"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
                   disabled={!inviteEmail}
                 >
                   Send invitation

@@ -92,7 +92,11 @@ export const api = {
     },
 
     getConnectedRepositories: async (): Promise<ApiConnectedRepository[]> => {
-      return request('/github/connected-repositories');
+      // skipSessionLogout: a 401 here means "no connected repos yet" (GitHub
+      // not linked), not an expired session. During the initial restore this
+      // must not trigger the global logout, which would clear `user` while
+      // navigateToDashboard then routes to the connect-github gate.
+      return request('/github/connected-repositories', {}, { skipSessionLogout: true });
     },
   },
 
@@ -173,7 +177,7 @@ export const api = {
 
   users: {
     getMe: async (): Promise<any> => {
-      return request('/users');
+      return request('/users/me');
     },
 
     login: async (email: string, password: string) => {

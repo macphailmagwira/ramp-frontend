@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import {
   Card,
@@ -17,7 +16,6 @@ import { api } from '@/lib/api';
 import {
   Eye,
   EyeOff,
-  Github,
   Mail,
   Lock,
   ArrowRight,
@@ -143,22 +141,6 @@ export function LoginPage({ onLogin, onNavigate }: LoginPageProps) {
         </CardContent>
 
         <CardFooter className="flex-col gap-4">
-          <div className="relative w-full">
-            <Separator />
-            <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
-              Or continue with
-            </span>
-          </div>
-
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => { window.location.href = api.github.getLoginUrl(); }}
-          >
-            <Github className="mr-2 h-4 w-4" />
-            GitHub
-          </Button>
-
           <p className="text-center text-sm text-muted-foreground">
             Don't have an account?{' '}
             <Button

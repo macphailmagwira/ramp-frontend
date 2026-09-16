@@ -43,6 +43,11 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        ramp: {
+          blue: "hsl(var(--ramp-blue))",
+          "blue-dark": "hsl(var(--ramp-blue-dark))",
+          "blue-light": "hsl(var(--ramp-blue-light))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

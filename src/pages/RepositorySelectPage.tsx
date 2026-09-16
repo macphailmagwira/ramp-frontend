@@ -315,12 +315,12 @@ export function RepositorySelectPage({
                               className={cn(
                                 'flex items-center justify-center w-5 h-5 rounded-md border-[1.5px] transition-all duration-150',
                                 isSelected
-                                  ? 'bg-ramp-blue border-ramp-blue shadow-[0_0_0_3px_rgba(79,109,255,0.15)]'
+                                  ? 'bg-primary border-primary shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]'
                                   : 'border-muted-foreground/30 group-hover:border-muted-foreground/50'
                               )}
                             >
                               {isSelected && (
-                                <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                                <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={3} />
                               )}
                             </div>
                           )}
@@ -393,7 +393,7 @@ export function RepositorySelectPage({
               Cancel
             </Button>
             <Button
-              className="gap-2 bg-ramp-blue hover:bg-ramp-blue-dark text-white font-medium rounded-lg shadow-sm hover:shadow-glow-sm transition-all duration-200 px-5"
+              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 font-medium rounded-lg shadow-sm transition-all duration-200 px-5"
               disabled={selectedRepos.size === 0 || isLoading}
               onClick={handleContinue}
             >

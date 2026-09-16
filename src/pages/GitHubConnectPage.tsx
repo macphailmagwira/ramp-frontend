@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { User } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Github, ArrowLeft, LogOut, ShieldCheck, GitBranch, Sparkles } from 'lucide-react';
+import { Github, ArrowLeft, LogOut, ShieldCheck, GitBranch, Sparkles, Sun, Moon } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface GitHubConnectPageProps {
   user: User | null;
@@ -11,6 +12,19 @@ interface GitHubConnectPageProps {
 
 export function GitHubConnectPage({ user, onLogout }: GitHubConnectPageProps) {
   const [isConnecting, setIsConnecting] = useState(false);
+  const { setTheme } = useTheme();
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() =>
+      setIsDark(root.classList.contains('dark'))
+    );
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   const handleConnect = () => {
     setIsConnecting(true);
@@ -26,6 +40,19 @@ export function GitHubConnectPage({ user, onLogout }: GitHubConnectPageProps) {
           {user && (
             <span className="hidden sm:inline text-sm text-muted-foreground">{user.email}</span>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-foreground/60 hover:text-foreground"
+            onClick={() => setTheme(isDark ? 'light' : 'dark')}
+            aria-label="Toggle theme"
+          >
+            {isDark ? (
+              <Moon className="h-4 w-4" />
+            ) : (
+              <Sun className="h-4 w-4" />
+            )}
+          </Button>
           <Button variant="ghost" size="sm" className="gap-2" onClick={onLogout}>
             <LogOut className="h-4 w-4" />
             Log out
@@ -34,21 +61,39 @@ export function GitHubConnectPage({ user, onLogout }: GitHubConnectPageProps) {
       </header>
 
       <main className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-md text-center animate-fade-in">
-          <div className="mx-auto mb-6 flex items-center justify-center w-16 h-16 rounded-2xl bg-ramp-blue/10 border border-ramp-blue/20">
-            <Github className="h-8 w-8 text-ramp-blue" />
+        <div className="w-full max-w-lg text-center animate-fade-in">
+          <div className="mx-auto mb-7 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+            <Github className="h-8 w-8 text-foreground/80" />
           </div>
-
-          <h1 className="text-2xl font-bold tracking-tight mb-2">
-            Connect your GitHub account
-          </h1>
-          <p className="text-muted-foreground text-sm mb-8">
-            Ramp analyzes your repositories to generate architecture diagrams,
-            flow stories, and documentation. Link GitHub to get started.
+          <h1 className="text-3xl font-bold tracking-tight mb-3">Connect your GitHub account</h1>
+          <p className="text-muted-foreground mb-10 max-w-md mx-auto leading-relaxed">
+            Ramp analyzes your repositories to generate architecture diagrams, flow
+            stories, and documentation. Link GitHub to get started.
           </p>
 
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-10 text-left">
+            <div className="flex flex-col gap-2 rounded-xl bg-muted/40 p-4">
+              <GitBranch className="h-4 w-4 text-foreground/70" />
+              <p className="text-xs text-muted-foreground">
+                Browse and select the repositories you want to document.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 rounded-xl bg-muted/40 p-4">
+              <Sparkles className="h-4 w-4 text-foreground/70" />
+              <p className="text-xs text-muted-foreground">
+                Auto-generate architecture graphs and flow stories.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 rounded-xl bg-muted/40 p-4">
+              <ShieldCheck className="h-4 w-4 text-foreground/70" />
+              <p className="text-xs text-muted-foreground">
+                Read-only access via GitHub OAuth. You stay in control.
+              </p>
+            </div>
+          </div>
+
           <Button
-            className="w-full gap-2 bg-ramp-blue hover:bg-ramp-blue-dark text-white font-medium rounded-lg shadow-sm hover:shadow-glow-sm transition-all duration-200 h-11"
+            className="w-full h-11 gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={handleConnect}
             disabled={isConnecting}
           >
@@ -56,36 +101,18 @@ export function GitHubConnectPage({ user, onLogout }: GitHubConnectPageProps) {
             {isConnecting ? 'Redirecting to GitHub…' : 'Connect GitHub'}
           </Button>
 
-          <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
-            <div className="flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3">
-              <GitBranch className="h-4 w-4 text-ramp-blue" />
-              <p className="text-xs text-muted-foreground">
-                Browse and select the repositories you want to document.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3">
-              <Sparkles className="h-4 w-4 text-ramp-blue" />
-              <p className="text-xs text-muted-foreground">
-                Auto-generate architecture graphs and flow stories.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3">
-              <ShieldCheck className="h-4 w-4 text-ramp-blue" />
-              <p className="text-xs text-muted-foreground">
-                Read-only access via GitHub OAuth. You stay in control.
-              </p>
-            </div>
-          </div>
-
-          <p className="mt-6 text-xs text-muted-foreground/70">
-            We request <code className="font-mono">repo</code>,{' '}
-            <code className="font-mono">read:user</code> and{' '}
-            <code className="font-mono">user:email</code> scopes.
+          <p className="mt-6 text-xs text-muted-foreground">
+            We request{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">repo</code>,{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">read:user</code>{' '}
+            and{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">user:email</code>{' '}
+            scopes.
           </p>
 
           <button
             onClick={onLogout}
-            className="mt-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="mt-8 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-3 w-3" />
             Sign in with a different account

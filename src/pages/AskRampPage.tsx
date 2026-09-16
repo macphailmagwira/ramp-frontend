@@ -174,7 +174,7 @@ Would you like me to show you the specific code or explain how it integrates wit
                   className={cn(
                     'inline-block',
                     message.role === 'user'
-                      ? 'bg-ramp-blue text-white'
+                      ? 'bg-primary text-primary-foreground'
                       : 'bg-card'
                   )}
                 >
@@ -299,7 +299,7 @@ Would you like me to show you the specific code or explain how it integrates wit
               />
             </div>
             <Button
-              className="h-12 px-6 bg-ramp-blue hover:bg-ramp-blue-dark text-white"
+              className="h-12 px-6 bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={handleSend}
               disabled={!inputValue.trim() || isTyping}
             >
