@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
+import { gradientFor, initialsOf } from '@/lib/avatar';
 import {
   Github,
   Trash2,
@@ -108,11 +109,15 @@ function ToggleRow({
 // ── Avatar with fallback ──────────────────────────────────────────────────────
 function UserAvatar({ user }: { user: User | null }) {
   const [errored, setErrored] = useState(false);
-  const initials = user?.name?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? '??';
+  const initials = initialsOf(user?.name);
+  const seed = user?.id || user?.email || user?.name || 'user';
 
   if (!user?.avatar || errored) {
     return (
-      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-lg font-semibold text-muted-foreground ring-2 ring-border/40">
+      <div
+        className="w-16 h-16 rounded-full flex items-center justify-center text-lg font-semibold text-white ring-2 ring-border/40"
+        style={{ background: gradientFor(seed) }}
+      >
         {initials}
       </div>
     );

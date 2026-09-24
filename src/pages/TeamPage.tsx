@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { gradientFor, initialsOf } from '@/lib/avatar';
 import {
   Users,
   Plus,
@@ -66,28 +67,18 @@ const ROLE_CONFIG: Record<
   },
 };
 
-// Deterministic pastel avatar bg from name
-function avatarColor(name: string) {
-  const colors = [
-    ['bg-violet-100 dark:bg-violet-900/40', 'text-violet-700 dark:text-violet-300'],
-    ['bg-sky-100 dark:bg-sky-900/40', 'text-sky-700 dark:text-sky-300'],
-    ['bg-emerald-100 dark:bg-emerald-900/40', 'text-emerald-700 dark:text-emerald-300'],
-    ['bg-rose-100 dark:bg-rose-900/40', 'text-rose-700 dark:text-rose-300'],
-    ['bg-amber-100 dark:bg-amber-900/40', 'text-amber-700 dark:text-amber-300'],
-    ['bg-teal-100 dark:bg-teal-900/40', 'text-teal-700 dark:text-teal-300'],
-  ];
-  const idx = name.charCodeAt(0) % colors.length;
-  return colors[idx];
-}
-
+// Deterministic gradient avatar bg from a stable seed (id/email/name)
 function Avatar({ member }: { member: TeamMember }) {
   const [errored, setErrored] = useState(false);
-  const initials = member.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-  const [bg, fg] = avatarColor(member.name);
+  const initials = initialsOf(member.name);
+  const seed = member.id || member.email || member.name || 'user';
 
   if (!member.avatar || errored) {
     return (
-      <div className={cn('w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0', bg, fg)}>
+      <div
+        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white flex-shrink-0"
+        style={{ background: gradientFor(seed) }}
+      >
         {initials}
       </div>
     );

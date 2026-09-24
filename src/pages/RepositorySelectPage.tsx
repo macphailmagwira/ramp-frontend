@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
+import { gradientFor, initialsOf } from '@/lib/avatar';
 import { api } from '@/lib/api';
 import {
   Search,
@@ -141,7 +142,16 @@ export function RepositorySelectPage({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-9 gap-2 pl-1.5 pr-2 rounded-lg hover:bg-muted/60">
-                  <img src={user.avatar} alt={user.name} className="h-6 w-6 rounded-full ring-1 ring-border/60" />
+                  {user.avatar ? (
+                    <img src={user.avatar} alt={user.name} className="h-6 w-6 rounded-full ring-1 ring-border/60" />
+                  ) : (
+                    <span
+                      className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white ring-1 ring-border/60"
+                      style={{ background: gradientFor(user.id || user.email || user.name) }}
+                    >
+                      {initialsOf(user.name)}
+                    </span>
+                  )}
                   <span className="hidden sm:inline text-sm font-medium">{user.name}</span>
                 </Button>
               </DropdownMenuTrigger>

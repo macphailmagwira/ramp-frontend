@@ -75,9 +75,7 @@ const toUser = (apiUser: any): User => {
     id,
     name,
     email,
-    avatar:
-      apiUser.avatar ||
-      `https://api.dicebear.com/7.x/avataaars/svg?seed=${email || id || 'user'}`,
+    avatar: apiUser.avatar || '',
     role: 'owner' as const,
   };
 };

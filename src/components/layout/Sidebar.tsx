@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { gradientFor, initialsOf } from '@/lib/avatar';
 import type { ViewState, Repository, User } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -548,12 +549,7 @@ function UserFooter({
 }) {
   if (!user) return null;
 
-  const initials = user.name
-    .split(' ')
-    .map(w => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const initials = initialsOf(user.name);
 
   const trigger = (
     <button
@@ -565,7 +561,10 @@ function UserFooter({
       )}
       aria-label="Account menu"
     >
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+      <span
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+        style={{ background: user.avatar ? undefined : gradientFor(user.id || user.email || user.name) }}
+      >
         {user.avatar ? (
           <img src={user.avatar} alt={user.name} className="h-full w-full rounded-full" />
         ) : (
