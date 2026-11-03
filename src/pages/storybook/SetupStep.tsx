@@ -1,11 +1,11 @@
 import * as React from "react"
-import { AlertTriangle, Check, ChevronDown, Copy, RefreshCw } from "lucide-react"
+import { AlertTriangle, Check, ChevronDown, Copy, FileText, KeyRound, RefreshCw, Server } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { StorybookSetUp, StorybookSetupStep, StorybookRunOption } from "@/types"
@@ -95,17 +95,6 @@ function OptionPanel({ option }: { option: StorybookRunOption }) {
   )
 }
 
-function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  )
-}
-
 type Props = {
   section: StorybookSetUp
   onRegenerate?: () => void
@@ -122,7 +111,7 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
     <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">Set up</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Lets get you setup and running</h1>
           <p className="max-w-prose text-muted-foreground">
             {section.summary || "How do I get this project running?"}
           </p>
@@ -200,31 +189,33 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
           {/* Run options come ordered most reliable first, so the first tab is the default. */}
           <Tabs defaultValue="0" className="min-w-0 gap-4">
-            <TabsList className="grid h-auto w-full grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-3 bg-transparent p-0">
+            <TabsList className="grid h-auto w-full auto-rows-fr grid-cols-2 gap-3 bg-transparent p-0 sm:grid-cols-3">
               {section.run_options.map((o, i) => (
                 <TabsTrigger
                   key={`${o.name}-${i}`}
                   value={String(i)}
                   className={cn(
-                    "group h-auto flex-col items-start justify-start gap-2 whitespace-normal rounded-lg border-2 border-border bg-card px-4 py-3 text-left text-sm font-medium text-foreground shadow-none transition-colors",
+                    "group h-auto h-full flex-col items-start justify-start gap-2 whitespace-normal rounded-lg border-2 border-border bg-card px-4 py-3 text-left text-sm font-medium text-foreground shadow-none transition-colors",
                     "hover:border-primary/50 hover:bg-accent/50",
                     "data-[state=active]:border-primary data-[state=active]:bg-primary/10 data-[state=active]:shadow-sm",
                     "dark:data-[state=active]:border-primary dark:data-[state=active]:bg-primary/20"
                   )}
                 >
-                  <span className="flex w-full items-start gap-2.5">
-                    {/* radio-style indicator: empty ring when idle, filled check when selected */}
-                    <span
-                      aria-hidden
-                      className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/50 group-data-[state=active]:border-primary group-data-[state=active]:bg-primary"
-                    >
-                      <Check className="size-3 text-primary-foreground opacity-0 group-data-[state=active]:opacity-100" />
+                  <span className="flex w-full flex-col gap-1.5">
+                    <span className="flex items-start gap-2.5">
+                      {/* radio-style indicator: empty ring when idle, filled check when selected */}
+                      <span
+                        aria-hidden
+                        className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/50 group-data-[state=active]:border-primary group-data-[state=active]:bg-primary"
+                      >
+                        <Check className="size-3 text-primary-foreground opacity-0 group-data-[state=active]:opacity-100" />
+                      </span>
+                      <span className="min-w-0 break-words text-sm font-medium leading-snug">{o.name}</span>
                     </span>
-                    <span className="min-w-0 break-words leading-snug">{o.name}</span>
-                  </span>
-                  <span className="flex items-center gap-1.5 pl-[26px] text-xs font-normal text-muted-foreground group-data-[state=active]:text-foreground/80">
-                    <span className={cn("size-2 rounded-full", RELIABILITY_DOT[o.reliability])} aria-hidden />
-                    <span className="capitalize">{o.reliability} reliability</span>
+                    <span className="flex items-center gap-1.5 pl-[26px] text-xs font-normal text-muted-foreground group-data-[state=active]:text-foreground/80">
+                      <span className={cn("size-2 rounded-full", RELIABILITY_DOT[o.reliability])} aria-hidden />
+                      <span className="capitalize">{o.reliability} reliability</span>
+                    </span>
                   </span>
                 </TabsTrigger>
               ))}
@@ -238,42 +229,76 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
 
           <aside className="space-y-4">
             {section.env_vars.length > 0 && (
-              <SideCard title="Environment variables">
-                <dl className="space-y-3 text-sm">
-                  {envVars.map((v) => (
-                    <div key={v.name}>
-                      <dt className="text-xs font-medium">{v.name}</dt>
-                      <dd className="text-muted-foreground">{v.purpose}</dd>
+              <Collapsible defaultOpen className="overflow-hidden rounded-xl border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md">
+                <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left outline-none">
+                  <KeyRound className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <CardTitle className="text-base">Environment variables</CardTitle>
+                  <Badge variant="secondary" className="ml-1">{section.env_vars.length}</Badge>
+                  <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="border-t border-border">
+                  <dl className="divide-y divide-border">
+                    {envVars.map((v) => (
+                      <div key={v.name} className="px-4 py-2.5 transition-colors hover:bg-accent/40">
+                        <dt>
+                          <code className="inline-block rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold text-foreground">{v.name}</code>
+                        </dt>
+                        <dd className="mt-1 text-sm text-muted-foreground">{v.purpose}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {section.env_vars.length > 6 && (
+                    <div className="px-4 pb-3">
+                      <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setShowAllEnv((v) => !v)}>
+                        {showAllEnv ? "Show fewer" : `Show all ${section.env_vars.length}`}
+                      </Button>
                     </div>
-                  ))}
-                </dl>
-                {section.env_vars.length > 6 && (
-                  <Button variant="link" size="sm" className="mt-2 h-auto p-0" onClick={() => setShowAllEnv((v) => !v)}>
-                    {showAllEnv ? "Show fewer" : `Show all ${section.env_vars.length}`}
-                  </Button>
-                )}
-              </SideCard>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
             )}
             {section.services.length > 0 && (
-              <SideCard title="Services">
-                <div className="flex flex-wrap gap-1.5">
-                  {section.services.map((s) => (
-                    <Badge key={s} variant="secondary">{s}</Badge>
-                  ))}
-                </div>
-              </SideCard>
+              <Collapsible defaultOpen className="overflow-hidden rounded-xl border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md">
+                <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left outline-none">
+                  <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <CardTitle className="text-base">Services</CardTitle>
+                  <Badge variant="secondary" className="ml-1">{section.services.length}</Badge>
+                  <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="border-t border-border">
+                  <ul className="divide-y divide-border">
+                    {section.services.map((s) => (
+                      <li key={s} className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-accent/40">
+                        <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                        <span className="text-sm font-medium">{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CollapsibleContent>
+              </Collapsible>
             )}
             {section.files_guide.length > 0 && (
-              <SideCard title="Which file is for what">
-                <dl className="space-y-3 text-sm">
-                  {section.files_guide.map((f) => (
-                    <div key={f.file}>
-                      <dt className="break-all text-xs font-medium">{f.file}</dt>
-                      <dd className="text-muted-foreground">{f.purpose}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </SideCard>
+              <Collapsible defaultOpen className="overflow-hidden rounded-xl border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md">
+                <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left outline-none">
+                  <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <CardTitle className="text-base">what each file does</CardTitle>
+                  <Badge variant="secondary" className="ml-1">{section.files_guide.length}</Badge>
+                  <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="border-t border-border">
+                  <ul className="divide-y divide-border">
+                    {section.files_guide.map((f) => (
+                      <li key={f.file} className="flex gap-2.5 px-4 py-2.5 transition-colors hover:bg-accent/40">
+                        <FileText className="size-4 shrink-0 mt-0.5 text-muted-foreground" aria-hidden />
+                        <div className="min-w-0 space-y-0.5">
+                          <p className="break-all font-mono text-xs font-medium">{f.file}</p>
+                          <p className="text-sm text-muted-foreground">{f.purpose}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </CollapsibleContent>
+              </Collapsible>
             )}
           </aside>
         </div>

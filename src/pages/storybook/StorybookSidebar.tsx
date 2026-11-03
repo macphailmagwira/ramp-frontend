@@ -1,5 +1,5 @@
 import * as React from "react"
-import { AlertTriangle, BookOpen, Check, Download, Loader2, Lock, type LucideIcon } from "lucide-react"
+import { AlertTriangle, BookOpen, Check, Loader2, Lock, PanelLeftClose, type LucideIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -32,11 +32,10 @@ type Props = React.HTMLAttributes<HTMLDivElement> & {
   activeId: string
   onStepSelect: (id: string) => void
   savedFile?: string
-  canExport?: boolean
-  onExport?: () => void
+  onCollapse?: () => void
 }
 
-export function StorybookSidebar({ project, steps, activeId, onStepSelect, savedFile, canExport = false, onExport, className, ...props }: Props) {
+export function StorybookSidebar({ project, steps, activeId, onStepSelect, savedFile, onCollapse, className, ...props }: Props) {
   const ready = steps.filter((s) => s.status === "ready").length
 
   return (
@@ -48,19 +47,32 @@ export function StorybookSidebar({ project, steps, activeId, onStepSelect, saved
       {...props}
     >
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" className="pointer-events-none">
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <BookOpen className="size-4" />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">Storybook</span>
-                <span className="truncate text-xs text-sidebar-foreground/70">Onboarding guide</span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <div className="flex items-start justify-between gap-2">
+          <SidebarMenu className="flex-1">
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" className="pointer-events-none">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                  <BookOpen className="size-4" />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">Storybooks</span>
+                  <span className="truncate text-xs text-sidebar-foreground/70"></span>
+                </div>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+          {onCollapse && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Collapse sidebar"
+              onClick={onCollapse}
+              className="mt-0.5 shrink-0 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+            >
+              <PanelLeftClose className="size-4" />
+            </Button>
+          )}
+        </div>
       </SidebarHeader>
 
       <SidebarContent>
@@ -134,9 +146,6 @@ export function StorybookSidebar({ project, steps, activeId, onStepSelect, saved
             Saved as <span className="block break-all font-mono text-sidebar-foreground">{savedFile}</span>
           </p>
         )}
-        <Button variant="outline" disabled={!canExport} onClick={onExport}>
-          <Download /> Export book
-        </Button>
       </SidebarFooter>
     </div>
   )

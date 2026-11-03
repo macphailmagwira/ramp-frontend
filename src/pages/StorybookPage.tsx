@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   BookOpen,
   Loader2,
+  PanelLeftOpen,
   RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
   const [repoName, setRepoName] = useState<string>('');
   const [busy, setBusy] = useState<Busy>(false);
   const [activeId, setActiveId] = useState('set_up');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const load = useCallback(async () => {
     if (!repoId) {
@@ -142,19 +144,33 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
           : 'locked';
 
   const steps: StorybookStep[] = [
-    { id: 'set_up', title: 'Set up', status: stepStatus },
+    { id: 'set_up', title: 'Setup & Run', status: stepStatus },
   ];
 
   return (
     <SidebarProvider className="flex h-full w-full overflow-hidden bg-background">
-      <StorybookSidebar
-        project={{ name: repoName || 'repository' }}
-        steps={steps}
-        activeId={activeId}
-        onStepSelect={setActiveId}
-      />
+      {sidebarOpen && (
+        <StorybookSidebar
+          project={{ name: repoName || 'repository' }}
+          steps={steps}
+          activeId={activeId}
+          onStepSelect={setActiveId}
+          onCollapse={() => setSidebarOpen(false)}
+        />
+      )}
 
       <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
+        {!sidebarOpen && (
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Open sidebar"
+            onClick={() => setSidebarOpen(true)}
+            className="absolute left-3 top-3 z-20 shadow-sm"
+          >
+            <PanelLeftOpen />
+          </Button>
+        )}
           {busy === 'scan' && (
             <CenteredMessage
               icon={<Loader2 className="size-6 animate-spin text-ramp-blue" />}
