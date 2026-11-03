@@ -1,4 +1,4 @@
-import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository } from '@/types';
+import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository, StorybookBookResponse } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -27,7 +27,7 @@ export function onUnauthorized(handler: () => void): void {
 async function request<T = any>(
   path: string,
   options: RequestInit = {},
-  opts: { skipSessionLogout?: boolean } = {}
+  opts: { skipSessionLogout?: boolean; timeout?: number } = {}
 ): Promise<T> {
   const headers = new Headers(options.headers);
 
@@ -38,7 +38,19 @@ async function request<T = any>(
     headers.set('Content-Type', 'application/json');
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let abort: AbortController | null = null;
+  if (opts.timeout && typeof AbortController !== 'undefined') {
+    abort = new AbortController();
+    const id = setTimeout(() => abort!.abort(), opts.timeout);
+    (abort as unknown as { _t?: ReturnType<typeof setTimeout> })._t = id;
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+    signal: abort?.signal,
+  });
+  if (abort) clearTimeout((abort as unknown as { _t?: ReturnType<typeof setTimeout> })._t);
 
   if (res.status === 401) {
     if (opts.skipSessionLogout) {
@@ -52,7 +64,11 @@ async function request<T = any>(
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error((data as { detail?: string }).detail || `Request failed (${res.status})`);
+    const err = new Error(
+      (data as { detail?: string }).detail || `Request failed (${res.status})`
+    );
+    (err as Error & { status?: number }).status = res.status;
+    throw err;
   }
 
   return res.json() as Promise<T>;
@@ -172,6 +188,37 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+    },
+
+    storybook: {
+      // GET /api/v1/ai/storybook/{connectedRepoId} — 404 means none exists yet.
+      get: async (repoId: string): Promise<StorybookBookResponse | null> => {
+        try {
+          return await request<StorybookBookResponse>(`/ai/storybook/${repoId}`);
+        } catch (err) {
+          if (err instanceof Error && (err as Error & { status?: number }).status === 404) {
+            return null;
+          }
+          throw err;
+        }
+      },
+
+      // POST /api/v1/ai/storybook  { connected_repo_id }
+      generate: async (repoId: string): Promise<StorybookBookResponse> =>
+        request<StorybookBookResponse>(
+          '/ai/storybook',
+          { method: 'POST', body: JSON.stringify({ connected_repo_id: repoId }) },
+          { timeout: 10 * 60 * 1000 }
+        ),
+
+      // POST /api/v1/ai/storybook/{connectedRepoId}/refresh
+      // Heavy: re-clones + re-analyzes the whole repo. Long timeout.
+      refresh: async (repoId: string): Promise<StorybookBookResponse> =>
+        request<StorybookBookResponse>(
+          `/ai/storybook/${repoId}/refresh`,
+          { method: 'POST' },
+          { timeout: 15 * 60 * 1000 }
+        ),
     },
   },
 

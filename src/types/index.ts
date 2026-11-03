@@ -285,26 +285,65 @@ export interface ApiOverviewResponse {
   description: string | null;
 }
 
-export interface ApiOverviewStats {
-  files: number;
-  folders: number;
-  functions: number;
-  dependencies: number;
+// ─── Storybook (AI set_up guide) ───────────────────────────────────────────────
+
+export type StorybookPhase =
+  | 'dependencies'
+  | 'env'
+  | 'services'
+  | 'run'
+  | 'verify';
+
+export interface StorybookSetupStep {
+  title: string;
+  description: string;
+  command: string; // may be "" for a purely descriptive step
+  phase: StorybookPhase;
+  source_file: string;
+  verified: boolean; // false = the command was not found in any repo file
 }
 
-export interface ApiOverviewCommit {
-  sha: string;
-  message: string;
-  author: string;
-  date: string;
-  type: 'feat' | 'fix' | 'other';
+export interface StorybookRunOption {
+  name: string;
+  reliability: 'high' | 'medium' | 'low';
+  best_for: string;
+  requires: string[];
+  steps: StorybookSetupStep[];
 }
 
-export interface ApiOverviewResponse {
-  stats: ApiOverviewStats;
-  recent_commits: ApiOverviewCommit[];
-  language: string | null;
-  default_branch: string;
-  description: string | null;
+export interface StorybookSetUp {
+  schema_version: number;
+  summary: string;
+  env_vars: { name: string; purpose: string }[];
+  services: string[];
+  files_guide: { file: string; purpose: string }[];
+  run_options: StorybookRunOption[]; // ordered most reliable first
+  warnings: string[];
+}
+
+export interface StorybookBook {
+  project?: string; // unreliable — backend derives it from an empty path; ignore
+  errors: string[];
+  sections: {
+    set_up: StorybookSetUp;
+  };
+}
+
+export interface StorybookBookResponse {
+  book: StorybookBook;
+}
+
+export type StorybookStepStatus = 'ready' | 'generating' | 'failed' | 'locked';
+
+export interface StorybookStep {
+  id: string; // the subgraph name, e.g. "set_up"
+  title: string;
+  status: StorybookStepStatus;
+  detail?: string;
+}
+
+export interface ApiScanStatus {
+  status: string;
+  [key: string]: unknown;
 }
 
