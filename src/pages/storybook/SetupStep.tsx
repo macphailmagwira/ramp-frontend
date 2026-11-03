@@ -1,15 +1,16 @@
 import * as React from "react"
-import { AlertTriangle, Check, Copy, RefreshCw } from "lucide-react"
+import { AlertTriangle, Check, ChevronDown, Copy, RefreshCw } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { StorybookSetUp, StorybookSetupStep, StorybookRunOption } from "@/types"
 
-const RELIABILITY_BADGE = { high: "default", medium: "secondary", low: "outline" } as const
+const RELIABILITY_DOT = { high: "bg-emerald-500", medium: "bg-amber-500", low: "bg-rose-500" } as const
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = React.useState(false)
@@ -165,31 +166,71 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
       )}
 
       {section.warnings.length > 0 && (
-        <Alert>
-          <AlertTriangle />
-          <AlertTitle>Warnings</AlertTitle>
-          <AlertDescription>
-            {section.warnings.map((w, i) => (
-              <span key={i} className="block">{w}</span>
-            ))}
-          </AlertDescription>
-        </Alert>
+        <Collapsible
+          defaultOpen={section.warnings.length <= 3}
+          className="overflow-hidden rounded-xl border border-amber-400/60 bg-amber-50/60 dark:border-amber-500/40 dark:bg-amber-500/5"
+        >
+          <CollapsibleTrigger className="group flex w-full items-center gap-2 px-5 py-4 text-left outline-none">
+            <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span className="font-medium">Warnings</span>
+            <Badge
+              variant="outline"
+              className="border-amber-400/60 text-amber-700 dark:text-amber-300"
+            >
+              {section.warnings.length}
+            </Badge>
+            <ChevronDown className="ml-auto size-4 shrink-0 text-amber-600 transition-transform duration-200 group-data-[state=open]:rotate-180 dark:text-amber-400" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="border-t border-amber-400/25">
+            <ul className="divide-y divide-amber-400/20 px-5">
+              {section.warnings.map((w, i) => (
+                <li key={i} className="flex items-start gap-2.5 py-3">
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-400/25 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                    {i + 1}
+                  </span>
+                  <span className="text-sm text-amber-900/90 dark:text-amber-100/80">{w}</span>
+                </li>
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </Collapsible>
       )}
 
       {section.run_options.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
           {/* Run options come ordered most reliable first, so the first tab is the default. */}
           <Tabs defaultValue="0" className="min-w-0 gap-4">
-            <TabsList className="h-auto flex-wrap justify-start">
+            <TabsList className="grid h-auto w-full grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-3 bg-transparent p-0">
               {section.run_options.map((o, i) => (
-                <TabsTrigger key={`${o.name}-${i}`} value={String(i)} className="gap-2">
-                  {o.name}
-                  <Badge variant={RELIABILITY_BADGE[o.reliability]}>{o.reliability}</Badge>
+                <TabsTrigger
+                  key={`${o.name}-${i}`}
+                  value={String(i)}
+                  className={cn(
+                    "group h-auto flex-col items-start justify-start gap-2 whitespace-normal rounded-lg border-2 border-border bg-card px-4 py-3 text-left text-sm font-medium text-foreground shadow-none transition-colors",
+                    "hover:border-primary/50 hover:bg-accent/50",
+                    "data-[state=active]:border-primary data-[state=active]:bg-primary/10 data-[state=active]:shadow-sm",
+                    "dark:data-[state=active]:border-primary dark:data-[state=active]:bg-primary/20"
+                  )}
+                >
+                  <span className="flex w-full items-start gap-2.5">
+                    {/* radio-style indicator: empty ring when idle, filled check when selected */}
+                    <span
+                      aria-hidden
+                      className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/50 group-data-[state=active]:border-primary group-data-[state=active]:bg-primary"
+                    >
+                      <Check className="size-3 text-primary-foreground opacity-0 group-data-[state=active]:opacity-100" />
+                    </span>
+                    <span className="min-w-0 break-words leading-snug">{o.name}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 pl-[26px] text-xs font-normal text-muted-foreground group-data-[state=active]:text-foreground/80">
+                    <span className={cn("size-2 rounded-full", RELIABILITY_DOT[o.reliability])} aria-hidden />
+                    <span className="capitalize">{o.reliability} reliability</span>
+                  </span>
                 </TabsTrigger>
               ))}
             </TabsList>
             {section.run_options.map((o, i) => (
-              <TabsContent key={`${o.name}-${i}`} value={String(i)}>
+              <TabsContent key={`${o.name}-${i}`} value={String(i)} className="mt-2">
                 <OptionPanel option={o} />
               </TabsContent>
             ))}
