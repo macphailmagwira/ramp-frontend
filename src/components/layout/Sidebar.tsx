@@ -106,8 +106,8 @@ const inboxItem: NavItem = { id: 'inbox', label: 'Inbox', icon: InboxIcon };
 
 const exploreItems: NavItem[] = [
   { id: 'architecture', label: 'Architecture', icon: Network },
-  { id: 'flows', label: 'Flows', icon: Workflow },
-  { id: 'storybook', label: 'Storybook', icon: BookOpen },
+  { id: 'flows', label: 'Flows & Features', icon: Workflow },
+  { id: 'storybook', label: 'Storybooks', icon: BookOpen },
 ];
 
 const syncItems: NavItem[] = [
