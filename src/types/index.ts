@@ -153,7 +153,9 @@ export type ViewState =
   | 'chat'
   | 'ask-ramp'
   | 'team'
-  | 'settings';
+  | 'settings'
+  | 'agents'
+  | 'agents-new';
 
 export interface ApiRepository {
   id: number;

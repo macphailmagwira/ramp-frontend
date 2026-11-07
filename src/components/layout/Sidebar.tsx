@@ -37,6 +37,8 @@ import {
   BookOpen,
   Video,
   MessageSquare,
+  GitPullRequest,
+  GitCommit,
   Folder,
   FileText,
   Users,
@@ -77,6 +79,12 @@ export interface KnowledgeCategory {
   docs: KnowledgeDoc[];
 }
 
+export interface AgentItem {
+  id: string;
+  label: string;
+  description?: string;
+}
+
 interface SidebarProps {
   currentView: ViewState;
   onNavigate: (view: ViewState) => void;
@@ -93,6 +101,10 @@ interface SidebarProps {
   onSelectDoc?: (docId: string) => void;
   onCreateCategory?: (label: string) => void;
   onCreateDoc?: (categoryId: string, label: string) => void;
+  agents?: AgentItem[];
+  activeAgentId?: string;
+  onSelectAgent?: (agentId: string) => void;
+  onAddAgent?: () => void;
 }
 
 interface NavItem {
@@ -421,6 +433,91 @@ function KnowledgeSection({
   );
 }
 
+// ─── Agents section — add new agent + example agents ───────────────────────
+
+function AgentsSection({
+  agents,
+  isOpen,
+  sectionCollapsed,
+  onToggleSection,
+  activeAgentId,
+  onSelectAgent,
+  onAddAgent,
+}: {
+  agents: AgentItem[];
+  isOpen: boolean;
+  sectionCollapsed: boolean;
+  onToggleSection: () => void;
+  activeAgentId?: string;
+  onSelectAgent?: (id: string) => void;
+  onAddAgent?: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      {isOpen && (
+        <div className="group flex h-6 w-full items-center gap-1 rounded">
+          <button
+            onClick={onToggleSection}
+            className={cn(
+              'flex h-6 flex-1 items-center gap-1 rounded px-2 text-xs font-medium text-foreground/40 hover:text-foreground/65',
+              noFocusRing
+            )}
+          >
+            <span>Agents</span>
+            <ChevronRight
+              className={cn(
+                'h-3 w-3 shrink-0 opacity-0 transition-transform group-hover:opacity-100',
+                !sectionCollapsed && 'rotate-90'
+              )}
+            />
+          </button>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              onAddAgent?.();
+            }}
+            aria-label="Add agent"
+            className={cn(
+              'mr-1 flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/[0.07] group-hover:opacity-100',
+              noFocusRing
+            )}
+          >
+            <Plus className="h-3 w-3 text-foreground/45" />
+          </button>
+        </div>
+      )}
+
+      {(!sectionCollapsed || !isOpen) && (
+        <>
+          {/* Add new agent — opens its own page */}
+          <Row
+            icon={Plus}
+            label="Add agent"
+            isOpen={isOpen}
+            onClick={onAddAgent}
+          />
+
+          {/* Example agents */}
+          {agents.map(agent => {
+            const Icon = agent.id === 'pr' ? GitPullRequest : GitCommit;
+            return (
+              <Row
+                key={agent.id}
+                icon={Icon}
+                label={agent.label}
+                isActive={activeAgentId === agent.id}
+                isOpen={isOpen}
+                indent={isOpen}
+                onClick={() => onSelectAgent?.(agent.id)}
+              />
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Repo switcher ────────────────────────────────────────────────────────────
 
 function RepoSwitcher({
@@ -659,9 +756,14 @@ export function Sidebar({
   onSelectDoc,
   onCreateCategory,
   onCreateDoc,
+  agents = [],
+  activeAgentId,
+  onSelectAgent,
+  onAddAgent,
 }: SidebarProps) {
   const [exploreCollapsed, setExploreCollapsed] = useState(false);
   const [syncCollapsed, setSyncCollapsed] = useState(false);
+  const [agentsCollapsed, setAgentsCollapsed] = useState(false);
   const [knowledgeCollapsed, setKnowledgeCollapsed] = useState(false);
 
   return (
@@ -762,6 +864,17 @@ export function Sidebar({
                   />
                 ))}
             </div>
+
+            {/* Agents */}
+            <AgentsSection
+              agents={agents}
+              isOpen={isOpen}
+              sectionCollapsed={agentsCollapsed}
+              onToggleSection={() => setAgentsCollapsed(v => !v)}
+              activeAgentId={activeAgentId}
+              onSelectAgent={onSelectAgent}
+              onAddAgent={onAddAgent}
+            />
 
             {/* Knowledge */}
             <KnowledgeSection

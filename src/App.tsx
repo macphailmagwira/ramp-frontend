@@ -5,7 +5,7 @@ import { mockTeamMembers } from '@/data/mock';
 import { api, getToken, setToken } from '@/lib/api';
 
 // Layout Components
-import { Sidebar, type KnowledgeCategory } from '@/components/layout/Sidebar';
+import { Sidebar, type KnowledgeCategory, type AgentItem } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 
 // Auth Pages
@@ -25,6 +25,8 @@ import { FlowsPage } from '@/pages/FlowsPage';
 import { AskRampPage } from '@/pages/AskRampPage';
 import { TeamPage } from '@/pages/TeamPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { AgentsPage } from '@/pages/AgentsPage';
+import { AgentsNewPage } from '@/pages/AgentsNewPage';
 
 import './App.css';
 
@@ -122,6 +124,11 @@ function AppContent() {
     },
   ]);
   const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
+  const [exampleAgents] = useState<AgentItem[]>(() => [
+    { id: 'pr', label: 'PR Agent', description: 'Automatically reviews and summarizes pull requests.' },
+    { id: 'commit', label: 'Commit Agent', description: 'Generates clear, conventional commit messages.' },
+  ]);
+  const [activeAgentId, setActiveAgentId] = useState<string | undefined>(undefined);
 
   const loadConnectedRepositories = useCallback(async () => {
     try {
@@ -391,6 +398,10 @@ function AppContent() {
         return <TeamPage members={mockTeamMembers} />;
       case 'settings':
         return <SettingsPage user={user} onLogout={handleLogout} />;
+      case 'agents':
+        return <AgentsPage agents={exampleAgents} activeAgentId={activeAgentId} />;
+      case 'agents-new':
+        return <AgentsNewPage onBack={() => setView('agents')} />;
       default:
         return <InboxPage/>;
     }
@@ -414,6 +425,13 @@ function AppContent() {
         onSelectDoc={setActiveDocId}
         onCreateCategory={handleCreateCategory}
         onCreateDoc={handleCreateDoc}
+        agents={exampleAgents}
+        activeAgentId={activeAgentId}
+        onSelectAgent={id => {
+          setActiveAgentId(id);
+          setView('agents');
+        }}
+        onAddAgent={() => setView('agents-new')}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar
