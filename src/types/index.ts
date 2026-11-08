@@ -323,11 +323,167 @@ export interface StorybookSetUp {
   warnings: string[];
 }
 
+// ─── Storybook (AI learn guide, schema_version 2) ────────────────────────────
+
+export type StorybookNodeKind =
+  | 'feature'
+  | 'component'
+  | 'function'
+  | 'service'
+  | 'database'
+  | 'external';
+
+export type StorybookEdgeKind = 'contains' | 'call' | 'branch' | 'error' | 'alt';
+
+export type StorybookParamIn = 'query' | 'path' | 'header' | 'body';
+
+export interface StorybookConnection {
+  from: string;
+  to: string;
+  note: string;
+}
+
+export interface StorybookOverviewModule {
+  name: string;
+  responsibility: string;
+  connects_to: string[];
+  key_files: string[];
+}
+
+export interface StorybookOverview {
+  summary: string;
+  framework: string[];
+  modules: StorybookOverviewModule[];
+  entry_points: string[];
+  connections: StorybookConnection[];
+}
+
+export interface StorybookGraphNodeDetail {
+  summary: string;
+  source_file: string | null;
+  code_ref: string | null;
+  line: number | null;
+}
+
+export interface StorybookGraphNode {
+  id: string;
+  kind: StorybookNodeKind;
+  label: string;
+  parent: string | null;
+  detail: StorybookGraphNodeDetail;
+}
+
+export interface StorybookGraphEdge {
+  from: string;
+  to: string;
+  kind: StorybookEdgeKind;
+  label: string;
+}
+
+export interface StorybookFlowStep {
+  name: string;
+  description: string;
+  type: 'function' | 'service' | 'database' | 'external';
+  file: string | null;
+  line: number | null;
+  insight: string | null;
+}
+
+export interface StorybookFlow {
+  id: string;
+  name: string;
+  description: string;
+  risks: string[];
+  graph: {
+    nodes: StorybookGraphNode[];
+    edges: StorybookGraphEdge[];
+  };
+  steps: StorybookFlowStep[];
+}
+
+export interface StorybookApiParam {
+  name: string;
+  in: StorybookParamIn;
+  type: string;
+  required: boolean;
+  description: string;
+}
+
+export interface StorybookApiEndpoint {
+  method: string;
+  path: string;
+  summary: string;
+  behavior: string;
+  params: StorybookApiParam[];
+  headers: string[];
+  body_schema: string;
+  response: string;
+  errors: string[];
+  example: string;
+  source_files: string[];
+  related: string[];
+}
+
+export interface StorybookApiGroup {
+  group: string;
+  endpoints: StorybookApiEndpoint[];
+}
+
+export interface StorybookSymbol {
+  name: string;
+  kind: string;
+  signature: string;
+  line: number;
+}
+
+export interface StorybookCodebaseFile {
+  path: string;
+  symbol_count: number;
+  symbols: StorybookSymbol[];
+}
+
+export interface StorybookCodebaseModule {
+  module: string;
+  responsibility: string;
+  file_count: number;
+  depends_on: string[];
+  files: StorybookCodebaseFile[];
+}
+
+export interface StorybookDependency {
+  from: string;
+  to: string;
+  kind: string;
+}
+
+export interface StorybookBusinessLogic {
+  topic: string;
+  locations: string[];
+}
+
+export interface StorybookCodebase {
+  modules: StorybookCodebaseModule[];
+  dependencies: StorybookDependency[];
+  business_logic: StorybookBusinessLogic[];
+  symbols_total: number;
+  routes_total: number;
+}
+
+export interface StorybookLearn {
+  schema_version: number;
+  overview: StorybookOverview;
+  flows: StorybookFlow[];
+  apis: StorybookApiGroup[];
+  codebase: StorybookCodebase;
+  warnings: string[];
+}
+
 export interface StorybookBook {
   project?: string; // unreliable — backend derives it from an empty path; ignore
   errors: string[];
   sections: {
     set_up: StorybookSetUp;
+    learn?: StorybookLearn;
   };
 }
 

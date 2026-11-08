@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import type {
   StorybookSetUp,
+  StorybookLearn,
   StorybookStep,
   StorybookStepStatus,
   ApiScanStatus,
@@ -18,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { StorybookSidebar } from './storybook/StorybookSidebar';
 import { SetupStep } from './storybook/SetupStep';
+import { LearnStep } from './storybook/LearnStep';
 
 type Phase = 'loading' | 'need-scan' | 'empty' | 'ready' | 'error';
 type Busy = false | 'scan' | 'generate' | 'refresh';
@@ -27,6 +29,7 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [section, setSection] = useState<StorybookSetUp | null>(null);
+  const [learn, setLearn] = useState<StorybookLearn | null>(null);
   const [bookErrors, setBookErrors] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [repoName, setRepoName] = useState<string>('');
@@ -69,6 +72,7 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
       }
       setBookErrors(res.book.errors ?? []);
       setSection(res.book.sections.set_up);
+      setLearn(res.book.sections.learn ?? null);
       setPhase('ready');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load storybook.');
@@ -105,6 +109,7 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
       const res = await api.ai.storybook.generate(repoId);
       setBookErrors(res.book.errors ?? []);
       setSection(res.book.sections.set_up);
+      setLearn(res.book.sections.learn ?? null);
       setPhase('ready');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate storybook.');
@@ -121,6 +126,7 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
       const res = await api.ai.storybook.refresh(repoId);
       setBookErrors(res.book.errors ?? []);
       setSection(res.book.sections.set_up);
+      setLearn(res.book.sections.learn ?? null);
       setPhase('ready');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to refresh storybook.');
@@ -133,18 +139,20 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
     if (repoId) load();
   }, [repoId, load]);
 
-  const stepStatus: StorybookStepStatus = busy
-    ? 'generating'
-    : section
-      ? 'ready'
-      : error
-        ? 'failed'
-        : phase === 'need-scan'
-          ? 'locked'
-          : 'locked';
+  const stepStatusFor = (has: boolean): StorybookStepStatus =>
+    busy
+      ? 'generating'
+      : has
+        ? 'ready'
+        : error
+          ? 'failed'
+          : phase === 'need-scan'
+            ? 'locked'
+            : 'locked';
 
   const steps: StorybookStep[] = [
-    { id: 'set_up', title: 'Setup & Run', status: stepStatus },
+    { id: 'set_up', title: 'Setup & Run', status: stepStatusFor(!!section) },
+    { id: 'learn', title: 'Understand the codebase', status: stepStatusFor(!!learn) },
   ];
 
   return (
@@ -237,7 +245,7 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
             />
           )}
 
-          {!busy && phase === 'ready' && section && (
+          {!busy && phase === 'ready' && section && Object.keys(section).length > 0 && activeId === 'set_up' && (
             <SetupStep
               section={section}
               onRegenerate={refresh}
@@ -246,14 +254,32 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
             />
           )}
 
-          {busy === 'refresh' && section && (
+          {!busy && phase === 'ready' && learn && Object.keys(learn).length > 0 && activeId === 'learn' && (
+            <LearnStep
+              section={learn}
+              onRegenerate={refresh}
+              regenerating={false}
+              errors={bookErrors}
+            />
+          )}
+
+          {busy === 'refresh' && section && Object.keys(section).length > 0 && (
             <div className="opacity-60 pointer-events-none">
-              <SetupStep
-                section={section}
-                onRegenerate={refresh}
-                regenerating
-                errors={bookErrors}
-              />
+              {activeId === 'learn' && learn ? (
+                <LearnStep
+                  section={learn}
+                  onRegenerate={refresh}
+                  regenerating
+                  errors={bookErrors}
+                />
+              ) : (
+                <SetupStep
+                  section={section}
+                  onRegenerate={refresh}
+                  regenerating
+                  errors={bookErrors}
+                />
+              )}
             </div>
           )}
         </main>

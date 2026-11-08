@@ -489,15 +489,7 @@ function AgentsSection({
 
       {(!sectionCollapsed || !isOpen) && (
         <>
-          {/* Add new agent — opens its own page */}
-          <Row
-            icon={Plus}
-            label="Add agent"
-            isOpen={isOpen}
-            onClick={onAddAgent}
-          />
-
-          {/* Example agents */}
+          {/* Example agents — outer list */}
           {agents.map(agent => {
             const Icon = agent.id === 'pr' ? GitPullRequest : GitCommit;
             return (
@@ -507,11 +499,19 @@ function AgentsSection({
                 label={agent.label}
                 isActive={activeAgentId === agent.id}
                 isOpen={isOpen}
-                indent={isOpen}
                 onClick={() => onSelectAgent?.(agent.id)}
               />
             );
           })}
+
+          {/* Add new agent — nested inside the group */}
+          <Row
+            icon={Plus}
+            label="Add agent"
+            isOpen={isOpen}
+            indent={isOpen}
+            onClick={onAddAgent}
+          />
         </>
       )}
     </div>

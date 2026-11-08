@@ -104,8 +104,9 @@ type Props = {
 
 export function SetupStep({ section, onRegenerate, regenerating = false, errors = [] }: Props) {
   const [showAllEnv, setShowAllEnv] = React.useState(false)
-  const unverified = section.run_options.flatMap((o) => o.steps).filter((s) => s.command && !s.verified).length
-  const envVars = showAllEnv ? section.env_vars : section.env_vars.slice(0, 6)
+  const sec = section ?? { summary: "", run_options: [], env_vars: [], services: [], files_guide: [], warnings: [] }
+  const unverified = sec.run_options.flatMap((o) => o.steps ?? []).filter((s) => s.command && !s.verified).length
+  const envVars = showAllEnv ? sec.env_vars : sec.env_vars.slice(0, 6)
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
@@ -113,7 +114,7 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Lets get you setup and running</h1>
           <p className="max-w-prose text-muted-foreground">
-            {section.summary || "How do I get this project running?"}
+            {sec.summary || "How do I get this project running?"}
           </p>
         </div>
         {onRegenerate && (
@@ -136,7 +137,7 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
       )}
 
       {/* Empty state: the model produced nothing usable. */}
-      {section.run_options.length === 0 && (
+      {sec.run_options.length === 0 && (
         <Alert variant="destructive">
           <AlertTriangle />
           <AlertTitle>We could not find a way to run this project</AlertTitle>
@@ -154,9 +155,9 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
         </Alert>
       )}
 
-      {section.warnings.length > 0 && (
+      {sec.warnings.length > 0 && (
         <Collapsible
-          defaultOpen={section.warnings.length <= 3}
+          defaultOpen={sec.warnings.length <= 3}
           className="overflow-hidden rounded-xl border border-amber-400/60 bg-amber-50/60 dark:border-amber-500/40 dark:bg-amber-500/5"
         >
           <CollapsibleTrigger className="group flex w-full items-center gap-2 px-5 py-4 text-left outline-none">
@@ -166,13 +167,13 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
               variant="outline"
               className="border-amber-400/60 text-amber-700 dark:text-amber-300"
             >
-              {section.warnings.length}
+              {sec.warnings.length}
             </Badge>
             <ChevronDown className="ml-auto size-4 shrink-0 text-amber-600 transition-transform duration-200 group-data-[state=open]:rotate-180 dark:text-amber-400" />
           </CollapsibleTrigger>
           <CollapsibleContent className="border-t border-amber-400/25">
             <ul className="divide-y divide-amber-400/20 px-5">
-              {section.warnings.map((w, i) => (
+              {sec.warnings.map((w, i) => (
                 <li key={i} className="flex items-start gap-2.5 py-3">
                   <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-400/25 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
                     {i + 1}
@@ -185,12 +186,12 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
         </Collapsible>
       )}
 
-      {section.run_options.length > 0 && (
+      {sec.run_options.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
           {/* Run options come ordered most reliable first, so the first tab is the default. */}
           <Tabs defaultValue="0" className="min-w-0 gap-4">
             <TabsList className="grid h-auto w-full auto-rows-fr grid-cols-2 gap-3 bg-transparent p-0 sm:grid-cols-3">
-              {section.run_options.map((o, i) => (
+              {sec.run_options.map((o, i) => (
                 <TabsTrigger
                   key={`${o.name}-${i}`}
                   value={String(i)}
@@ -220,7 +221,7 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
                 </TabsTrigger>
               ))}
             </TabsList>
-            {section.run_options.map((o, i) => (
+            {sec.run_options.map((o, i) => (
               <TabsContent key={`${o.name}-${i}`} value={String(i)} className="mt-2">
                 <OptionPanel option={o} />
               </TabsContent>
@@ -228,12 +229,12 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
           </Tabs>
 
           <aside className="space-y-4">
-            {section.env_vars.length > 0 && (
+            {sec.env_vars.length > 0 && (
               <Collapsible defaultOpen className="overflow-hidden rounded-xl border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md">
                 <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left outline-none">
                   <KeyRound className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <CardTitle className="text-base">Environment variables</CardTitle>
-                  <Badge variant="secondary" className="ml-1">{section.env_vars.length}</Badge>
+                  <Badge variant="secondary" className="ml-1">{sec.env_vars.length}</Badge>
                   <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
                 </CollapsibleTrigger>
                 <CollapsibleContent className="border-t border-border">
@@ -247,27 +248,27 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
                       </div>
                     ))}
                   </dl>
-                  {section.env_vars.length > 6 && (
+                  {sec.env_vars.length > 6 && (
                     <div className="px-4 pb-3">
                       <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setShowAllEnv((v) => !v)}>
-                        {showAllEnv ? "Show fewer" : `Show all ${section.env_vars.length}`}
+                        {showAllEnv ? "Show fewer" : `Show all ${sec.env_vars.length}`}
                       </Button>
                     </div>
                   )}
                 </CollapsibleContent>
               </Collapsible>
             )}
-            {section.services.length > 0 && (
+            {sec.services.length > 0 && (
               <Collapsible defaultOpen className="overflow-hidden rounded-xl border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md">
                 <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left outline-none">
                   <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <CardTitle className="text-base">Services</CardTitle>
-                  <Badge variant="secondary" className="ml-1">{section.services.length}</Badge>
+                  <Badge variant="secondary" className="ml-1">{sec.services.length}</Badge>
                   <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
                 </CollapsibleTrigger>
                 <CollapsibleContent className="border-t border-border">
                   <ul className="divide-y divide-border">
-                    {section.services.map((s) => (
+                    {sec.services.map((s) => (
                       <li key={s} className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-accent/40">
                         <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                         <span className="text-sm font-medium">{s}</span>
@@ -277,17 +278,17 @@ export function SetupStep({ section, onRegenerate, regenerating = false, errors 
                 </CollapsibleContent>
               </Collapsible>
             )}
-            {section.files_guide.length > 0 && (
+            {sec.files_guide.length > 0 && (
               <Collapsible defaultOpen className="overflow-hidden rounded-xl border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md">
                 <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left outline-none">
                   <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <CardTitle className="text-base">what each file does</CardTitle>
-                  <Badge variant="secondary" className="ml-1">{section.files_guide.length}</Badge>
+                  <Badge variant="secondary" className="ml-1">{sec.files_guide.length}</Badge>
                   <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
                 </CollapsibleTrigger>
                 <CollapsibleContent className="border-t border-border">
                   <ul className="divide-y divide-border">
-                    {section.files_guide.map((f) => (
+                    {sec.files_guide.map((f) => (
                       <li key={f.file} className="flex gap-2.5 px-4 py-2.5 transition-colors hover:bg-accent/40">
                         <FileText className="size-4 shrink-0 mt-0.5 text-muted-foreground" aria-hidden />
                         <div className="min-w-0 space-y-0.5">
