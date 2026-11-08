@@ -148,7 +148,6 @@ export type ViewState =
   | 'overview'
   | 'architecture'
   | 'storybook'
-  | 'flows'
   | 'meetings'
   | 'chat'
   | 'ask-ramp'

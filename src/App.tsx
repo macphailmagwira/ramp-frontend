@@ -21,7 +21,6 @@ import { RepositoryAnalysisPage } from '@/pages/RepositoryAnalysisPage';
 import { InboxPage } from '@/pages/InboxPage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { StorybookPage } from '@/pages/StorybookPage';
-import { FlowsPage } from '@/pages/FlowsPage';
 import { AskRampPage } from '@/pages/AskRampPage';
 import { TeamPage } from '@/pages/TeamPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -388,8 +387,6 @@ function AppContent() {
         return <InboxPage />;
       case 'architecture':
         return <ArchitecturePage repoId={connectedRepoId} />;
-      case 'flows':
-        return <FlowsPage />;
       case 'storybook':
         return <StorybookPage repoId={connectedRepoId} />;
      case 'ask-ramp':
