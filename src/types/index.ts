@@ -504,3 +504,49 @@ export interface ApiScanStatus {
   [key: string]: unknown;
 }
 
+// ─── Architecture story (POST /ai/architecture-story) ──────────────────────────
+
+export type ArchitectureStoryNodeType = 'system' | 'feature' | 'component' | 'file';
+
+export interface ArchitectureStoryNode {
+  id: string;
+  label: string;
+  type: ArchitectureStoryNodeType;
+  description?: string | null;
+  file_path?: string | null;
+  insight?: string | null;
+  edges: [string, string][];
+  children: ArchitectureStoryNode[];
+}
+
+export interface ArchitectureStoryRequest {
+  repo_id: string;
+  files: string[];
+  edges: { source: string; target: string }[];
+}
+
+export interface ArchitectureStoryResponse {
+  summary: string;
+  root: ArchitectureStoryNode;
+}
+
+// New interfaces for Architecture Graph (GET /github/{repo_id}/architecture)
+export interface ArchitectureGraphNode {
+  id: string; // folder path or file path
+  type: 'folder' | 'file';
+  file_count: number;
+}
+
+export interface ArchitectureGraphEdge {
+  source: string;
+  target: string;
+  weight: number;
+}
+
+export interface ArchitectureGraph {
+  nodes: ArchitectureGraphNode[]; // folder-level nodes
+  edges: ArchitectureGraphEdge[]; // folder-level edges
+  file_nodes: ArchitectureGraphNode[]; // file-level nodes
+  file_edges: ArchitectureGraphEdge[]; // file-level edges
+}
+

@@ -1,4 +1,4 @@
-import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository, StorybookBookResponse } from '@/types';
+import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository, StorybookBookResponse, ArchitectureStoryResponse, ArchitectureStoryRequest } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -118,7 +118,7 @@ export const api = {
 
   architecture: {
     getGraph: async (repoId: string) => {
-      return request(`/github/${repoId}/architecture`);
+      return request<ArchitectureGraph>(`/github/${repoId}/architecture`);
     },
   },
 
@@ -144,14 +144,12 @@ export const api = {
   },
 
   ai: {
-    generateStory: async (
-      repoId: string,
-      files: string[],
-      edges: { source: string; target: string; weight: number }[]
-    ) => {
-      return request('/ai/architecture-story', {
+    generateArchitectureStory: async (
+      payload: ArchitectureStoryRequest
+    ): Promise<ArchitectureStoryResponse> => {
+      return request<ArchitectureStoryResponse>('/ai/architecture-story', {
         method: 'POST',
-        body: JSON.stringify({ repo_id: repoId, files, edges }),
+        body: JSON.stringify(payload),
       });
     },
 
