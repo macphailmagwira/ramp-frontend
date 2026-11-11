@@ -323,11 +323,13 @@ function InboxRow({
   bucket,
   index,
   onOpen,
+  dimmed,
 }: {
   item: InboxItem;
   bucket: string;
   index: number;
   onOpen: () => void;
+  dimmed?: boolean;
 }) {
   const meta = CATEGORY_META[item.category];
   return (
@@ -335,8 +337,9 @@ function InboxRow({
       type="button"
       onClick={onOpen}
       className={cn(
-        'group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out hover:bg-white/[0.045] hover:shadow-[inset_2px_0_0_0_rgba(56,189,248,0.55)] active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 sm:px-6 lg:px-10',
-        index % 2 === 1 && 'bg-white/[0.015]'
+        'group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-[background-color,transform,box-shadow,opacity] duration-150 ease-out hover:bg-white/[0.045] hover:shadow-[inset_2px_0_0_0_rgba(56,189,248,0.55)] active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 sm:px-6 lg:px-10',
+        index % 2 === 1 && 'bg-white/[0.015]',
+        dimmed && 'opacity-55 hover:opacity-80'
       )}
     >
       <span className="flex w-3.5 shrink-0 justify-center">
@@ -489,7 +492,7 @@ function DateGroup({
               onOpen={() => onOpen(item)}
             />
           ) : (
-            <InboxRow key={item.id} item={item} bucket={label} index={index} onOpen={() => onToggle(item.id)} />
+            <InboxRow key={item.id} item={item} bucket={label} index={index} dimmed={expandedId !== null} onOpen={() => onToggle(item.id)} />
           )
         )}
       </div>

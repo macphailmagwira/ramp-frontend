@@ -248,6 +248,71 @@
   @apply bg-muted/50;
 }
 
+/* Beautiful loading screen */
+@keyframes pixel-static {
+  0% {
+    opacity: 0.1;
+  }
+  20% {
+    opacity: 0.32;
+  }
+  40% {
+    opacity: 0.16;
+  }
+  60% {
+    opacity: 0.45;
+  }
+  80% {
+    opacity: 0.2;
+  }
+  100% {
+    opacity: 0.3;
+  }
+}
+
+.animate-pixel-static {
+  animation: pixel-static 0.7s steps(1, end) infinite;
+}
+
+@keyframes static-sweep {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-static-sweep {
+  animation: static-sweep 1.4s linear infinite;
+}
+
+@keyframes dot2 {
+  0%, 32% {
+    opacity: 0;
+  }
+  33%, 100% {
+    opacity: 1;
+  }
+}
+
+@keyframes dot3 {
+  0%, 65% {
+    opacity: 0;
+  }
+  66%, 100% {
+    opacity: 1;
+  }
+}
+
+.animate-dot-2 {
+  animation: dot2 1.4s steps(1, end) infinite;
+}
+
+.animate-dot-3 {
+  animation: dot3 1.4s steps(1, end) infinite;
+}
+
 /* Settings tab active indicator */
 .tab-active {
   @apply relative;

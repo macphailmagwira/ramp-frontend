@@ -1,5 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+
+const STATIC_GREYS = [
+  'bg-neutral-100',
+  'bg-neutral-200',
+  'bg-neutral-300',
+  'bg-neutral-400',
+  'bg-neutral-500',
+];
+
+
 import type { ViewState, Repository, User, ApiRepository, ApiConnectedRepository } from '@/types';
 import { mockTeamMembers } from '@/data/mock';
 import { api, getToken, setToken } from '@/lib/api';
@@ -91,10 +101,16 @@ function AppContent() {
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [connectedRepositories, setConnectedRepositories] = useState<Repository[]>([]);
   const [user, setUser] = useState<User | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
+
+  useEffect(() => {
+    if (isAuthenticating) return;
+    const t = setTimeout(() => setIsSidebarOpen(true), 500);
+    return () => clearTimeout(t);
+  }, [isAuthenticating]);
   const [knowledgeCategories, setKnowledgeCategories] = useState<KnowledgeCategory[]>(() => [
     {
       id: 'getting-started',
@@ -323,11 +339,64 @@ function AppContent() {
 
   if (isAuthenticating) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-          <p className="text-muted-foreground text-sm">Loading...</p>
+      <div className="flex h-screen w-screen flex-col items-center justify-center gap-6 bg-background">
+        {/* ── Square of tiny neutral pixels with static ── */}
+        <div className="relative overflow-hidden rounded-3xl bg-black p-1 ring-1 ring-white/10 opacity-90">
+          <div
+            className="grid bg-black"
+            style={{ gridTemplateColumns: 'repeat(22, 1fr)', gridTemplateRows: 'repeat(22, 1fr)', gap: '0px', width: '104px', height: '104px' }}
+          >
+            {Array.from({ length: 32 * 32 }).map((_, i) => {
+              const delay = (Math.random() * 0.7).toFixed(2);
+              const dur = (0.3 + Math.random() * 0.5).toFixed(2);
+              const tone = STATIC_GREYS[Math.floor(Math.random() * STATIC_GREYS.length)];
+              return (
+                <span
+                  key={i}
+                  className={`animate-pixel-static ${tone}`}
+                  style={{ animationDelay: `${delay}s`, animationDuration: `${dur}s` }}
+                />
+              );
+            })}
+          </div>
+
+          {/* Faint static passing over */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="animate-static-sweep absolute inset-y-0 left-0 h-full w-[200%] opacity-[0.04] mix-blend-screen">
+              <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                <filter id="static-sweep-noise">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch">
+                    <animate attributeName="seed" from="1" to="120" dur="0.5s" repeatCount="indefinite" />
+                  </feTurbulence>
+                  <feColorMatrix type="saturate" values="0" />
+                </filter>
+                <rect width="100%" height="100%" filter="url(#static-sweep-noise)" />
+              </svg>
+            </div>
+          </div>
+
+          {/* CRT vignette + scanlines */}
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ boxShadow: 'inset 0 0 12px 2px rgba(0,0,0,0.5)' }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0 mix-blend-overlay"
+            style={{
+              backgroundImage:
+                'repeating-linear-gradient(to bottom, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 3px)',
+            }}
+          />
         </div>
+
+        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <span className="font-medium tracking-wide">Warming things up for you</span>
+          <span className="inline-flex">
+            <span>.</span>
+            <span className="animate-dot-2">.</span>
+            <span className="animate-dot-3">.</span>
+          </span>
+        </p>
       </div>
     );
   }

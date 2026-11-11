@@ -311,8 +311,8 @@ function KnowledgeSection({
     setCreatingDocFor(null);
   };
 
-  // Collapsed sidebar mini-mode: only render something if there are docs to show
-  if (!isOpen && categories.length === 0) return null;
+  // Knowledge is hidden entirely in collapsed (icon-only) mode
+  if (!isOpen) return null;
 
   return (
     <div className="flex flex-col gap-0.5">
