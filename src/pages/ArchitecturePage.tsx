@@ -384,13 +384,16 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
     return s;
   }, [viewEdges, focusId]);
 
+  // If the focused node has no links, there is nothing to highlight — so we
+  // should NOT dim anything (the whole point of dimming is to reveal connections).
+  const hasFocus = focusId !== null && connectedIds.size > 0;
+
   const selectedData = useMemo(() => {
     if (!selectedNode || !current) return null;
     if (selectedNode === current.id) return current;
     return current.children.find(c => c.id === selectedNode) ?? null;
   }, [selectedNode, current]);
 
-  // Keep selection valid when navigating (e.g. new view has no such node).
   useEffect(() => {
     if (!current) return;
     const stillVisible = selectedNode === current.id || current.children.some(c => c.id === selectedNode);
@@ -490,10 +493,19 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, [goUp, path.length]);
 
+  // Dimming rules:
+  //  - If a legend type is being hovered, filter by type.
+  //  - Else if a node is focused AND has connections, dim everything not connected.
+  //  - Else (no focus, or focus with no connections) → nothing is dimmed.
   const isNodeDimmed = (n: NodeWithPos) => {
     if (hoveredType) return n.type !== hoveredType;
-    if (!focusId) return false;
-    return focusId !== n.id && !connectedIds.has(n.id);
+    if (!hasFocus) return false;
+    return n.id !== focusId && !connectedIds.has(n.id);
+  };
+  const isEdgeDimmed = (s: string, t: string) => {
+    if (hoveredType && nodeById[s]?.type !== hoveredType) return true;
+    if (!hasFocus) return false;
+    return s !== focusId && t !== focusId;
   };
 
   const parentLabel = breadcrumb.length > 1 ? breadcrumb[breadcrumb.length - 2].label : null;
@@ -686,8 +698,8 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                     const sa = getEdgeAnchor(src, tc.x, tc.y, 0);
                     const ta = getEdgeAnchor(tgt, sc.x, sc.y, -5);
                     const p = TYPE_STYLE[src.type];
-                    const hi = !!focusId && (s === focusId || t === focusId);
-                    const dim = (!!focusId && !hi) || (!!hoveredType && hoveredType !== src.type);
+                    const hi = hasFocus && (s === focusId || t === focusId);
+                    const dim = isEdgeDimmed(s, t);
                     const d = getCurvedPath(sa.x, sa.y, ta.x, ta.y);
                     return (
                       <g key={i} className="motion-reduce:transition-none" opacity={dim ? 0.15 : 1} style={{ transition: 'opacity 0.2s' }}>
@@ -727,7 +739,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                 ))}
               </div>
 
-              {/* Floating "Up" button — visible only when drilled in */}
+              {/* Floating "Up" button */}
               {path.length > 0 && (
                 <div className="pointer-events-none absolute left-4 top-4 z-20">
                   <button
@@ -751,7 +763,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
 
               {/* Legend */}
               <Card className="pointer-events-auto absolute bottom-4 left-4 z-10 gap-0 rounded-xl border-border/60 bg-card/85 p-3 shadow-lg backdrop-blur-xl">
-                <div className="mb-2 text-[9px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+                <div className="mb-2 text-[9px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Node type
                 </div>
                 <div className="flex flex-col gap-0.5">
@@ -786,11 +798,11 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
             </div>
           )}
 
-          {/* Details panel (single collapse control inside the panel) */}
+          {/* Details panel */}
           {selectedData && panelOpen && (
-            <aside className="flex w-[312px] shrink-0 flex-col border-l border-border/60 bg-card/60 backdrop-blur-sm motion-safe:animate-in motion-safe:slide-in-from-right-2 motion-safe:duration-200">
-              <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-                <span className="text-[12px] font-semibold">Details</span>
+            <aside className="flex w-[320px] shrink-0 flex-col overflow-hidden border-l border-border/60 bg-card/60 backdrop-blur-sm motion-safe:animate-in motion-safe:slide-in-from-right-2 motion-safe:duration-200">
+              <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
+                <span className="text-[12px] font-semibold text-foreground">Details</span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -802,10 +814,11 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                 </Button>
               </div>
 
-              <ScrollArea className="flex-1">
-                <div className="space-y-4 p-4">
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="space-y-4 overflow-hidden p-4">
+                  {/* Identity card */}
                   <div
-                    className="flex items-center gap-2.5 rounded-lg border p-3"
+                    className="flex items-center gap-2.5 overflow-hidden rounded-lg border p-3"
                     style={{ borderColor: `${TYPE_STYLE[selectedData.type].border}55`, background: TYPE_STYLE[selectedData.type].bg }}
                   >
                     <span
@@ -818,9 +831,11 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                     >
                       <TypeIcon type={selectedData.type} className="h-3.5 w-3.5" />
                     </span>
-                    <div className="min-w-0">
-                      <div className="truncate text-[13px] font-bold text-foreground">{selectedData.label}</div>
-                      <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-bold text-foreground" title={selectedData.label}>
+                        {selectedData.label}
+                      </div>
+                      <div className="truncate text-[10.5px] uppercase tracking-[0.08em] text-foreground/70">
                         {TYPE_STYLE[selectedData.type].label}
                         {selectedData.type !== 'file' && ` · ${fileCounts[selectedData.id] ?? 0} files`}
                       </div>
@@ -829,10 +844,10 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
 
                   {selectedData.insight && (
                     <div
-                      className="rounded-lg border px-3 py-2 text-[11px] font-medium leading-snug"
+                      className="rounded-lg border px-3 py-2 text-[11.5px] font-medium leading-snug"
                       style={{
-                        background: `${TYPE_STYLE[selectedData.type].dot}10`,
-                        borderColor: `${TYPE_STYLE[selectedData.type].dot}33`,
+                        background: `${TYPE_STYLE[selectedData.type].dot}14`,
+                        borderColor: `${TYPE_STYLE[selectedData.type].dot}44`,
                         color: TYPE_STYLE[selectedData.type].dot,
                       }}
                     >
@@ -841,18 +856,18 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                   )}
 
                   {(selectedData.description || (selectedData.type === 'system' && tree?.summary)) && (
-                    <p className="text-[12px] leading-relaxed text-muted-foreground">
+                    <p className="break-words text-[12.5px] leading-relaxed text-foreground/75">
                       {selectedData.description ?? tree?.summary}
                     </p>
                   )}
 
                   {selectedData.file_path && (
-                    <div>
-                      <div className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+                    <div className="min-w-0">
+                      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                         Source file
                       </div>
                       <code
-                        className="block truncate rounded-md border border-border/60 bg-muted/40 px-2.5 py-1.5 font-mono text-[10.5px] text-muted-foreground"
+                        className="block break-all rounded-md border border-border/60 bg-muted/40 px-2.5 py-1.5 font-mono text-[10.5px] leading-relaxed text-foreground/80"
                         title={selectedData.file_path}
                       >
                         {selectedData.file_path}
@@ -870,8 +885,8 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                   )}
 
                   {selectedData.children.length > 0 && (
-                    <div>
-                      <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+                    <div className="min-w-0">
+                      <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                         Contains ({selectedData.children.length})
                       </div>
                       <div className="flex flex-col gap-1">
@@ -881,7 +896,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                             <button
                               key={child.id}
                               onClick={() => handleNodeClick(child)}
-                              className="group flex items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2.5 py-2 text-left transition-colors hover:border-border hover:bg-muted"
+                              className="group flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border/60 bg-background/60 px-2.5 py-2 text-left transition-colors hover:border-border hover:bg-muted"
                             >
                               <span
                                 className="flex h-5 w-5 shrink-0 items-center justify-center rounded"
@@ -889,7 +904,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                               >
                                 <TypeIcon type={child.type} className="h-2.5 w-2.5" />
                               </span>
-                              <span className="min-w-0 flex-1 truncate text-[11.5px] text-foreground">
+                              <span className="min-w-0 flex-1 truncate text-[11.5px] text-foreground" title={child.label}>
                                 {child.label}
                               </span>
                               <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5" />
@@ -904,13 +919,13 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
             </aside>
           )}
 
-          {/* Slim reopen tab when the panel is closed */}
+          {/* Reopen tab */}
           {selectedData && !panelOpen && (
             <button
               onClick={() => setPanelOpen(true)}
               aria-label="Open details panel"
               className={cn(
-                'absolute right-0 top-1/2 z-20 -translate-y-1/2 translate-x-0',
+                'absolute right-0 top-1/2 z-20 -translate-y-1/2',
                 'flex h-16 w-6 items-center justify-center rounded-l-md border border-r-0 border-border/70',
                 'bg-card/90 text-muted-foreground shadow-md backdrop-blur-md transition-colors hover:bg-card hover:text-foreground',
               )}
@@ -936,8 +951,8 @@ function DepList({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div>
-      <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+    <div className="min-w-0">
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
         {title} ({items.length})
       </div>
       <div className="flex flex-col gap-1">
@@ -945,7 +960,7 @@ function DepList({
           <button
             key={n.id}
             onClick={() => onSelect(n.id)}
-            className="group flex items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-muted"
+            className="group flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border/60 bg-background/60 px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-muted"
           >
             <span
               className="flex h-4 w-4 shrink-0 items-center justify-center"
@@ -953,7 +968,9 @@ function DepList({
             >
               <TypeIcon type={n.type} className="h-3 w-3" />
             </span>
-            <span className="min-w-0 flex-1 truncate text-[11px] text-foreground">{n.label}</span>
+            <span className="min-w-0 flex-1 truncate text-[11.5px] text-foreground" title={n.label}>
+              {n.label}
+            </span>
             <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />
           </button>
         ))}
