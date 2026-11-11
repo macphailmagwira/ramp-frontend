@@ -351,6 +351,74 @@ function AppContent() {
     );
   };
 
+  const findKnowledgeNode = (nodes: KnowledgeNode[], id: string): KnowledgeNode | null => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      if (n.children) {
+        const found = findKnowledgeNode(n.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const isKnowledgeDescendant = (nodes: KnowledgeNode[], ancestorId: string, targetId: string): boolean => {
+    const ancestor = findKnowledgeNode(nodes, ancestorId);
+    if (!ancestor || !ancestor.children) return false;
+    return !!findKnowledgeNode(ancestor.children, targetId);
+  };
+
+  const removeKnowledgeNode = (
+    nodes: KnowledgeNode[],
+    id: string
+  ): { tree: KnowledgeNode[]; removed: KnowledgeNode | null } => {
+    let removed: KnowledgeNode | null = null;
+    const walk = (list: KnowledgeNode[]): KnowledgeNode[] => {
+      const result: KnowledgeNode[] = [];
+      for (const n of list) {
+        if (n.id === id) {
+          removed = n;
+          continue;
+        }
+        if (n.children) {
+          const children = walk(n.children);
+          if (children === n.children) result.push(n);
+          else result.push({ ...n, children });
+        } else {
+          result.push(n);
+        }
+      }
+      return result;
+    };
+    return { tree: walk(nodes), removed };
+  };
+
+  const renameKnowledgeNode = (nodes: KnowledgeNode[], id: string, label: string): KnowledgeNode[] =>
+    nodes.map(n => {
+      if (n.id === id) return { ...n, label };
+      if (n.children) return { ...n, children: renameKnowledgeNode(n.children, id, label) };
+      return n;
+    });
+
+  const handleRenameNode = (id: string, label: string) => {
+    if (!label.trim()) return;
+    setKnowledgeNodes(prev => renameKnowledgeNode(prev, id, label.trim()));
+  };
+
+  const handleDeleteNode = (id: string) => {
+    setKnowledgeNodes(prev => removeKnowledgeNode(prev, id).tree);
+  };
+
+  const handleMoveNode = (id: string, newParentId: string | null) => {
+    setKnowledgeNodes(prev => {
+      // Prevent dropping a node into its own subtree.
+      if (newParentId !== null && isKnowledgeDescendant(prev, id, newParentId)) return prev;
+      const { tree, removed } = removeKnowledgeNode(prev, id);
+      if (!removed) return prev;
+      return insertKnowledgeNode(tree, newParentId, removed);
+    });
+  };
+
   if (isAuthenticating) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-6 bg-background">
@@ -504,6 +572,9 @@ function AppContent() {
         activeDocId={activeDocId}
         onSelectDoc={setActiveDocId}
         onCreateNode={handleCreateNode}
+        onRenameNode={handleRenameNode}
+        onDeleteNode={handleDeleteNode}
+        onMoveNode={handleMoveNode}
         agents={exampleAgents}
         activeAgentId={activeAgentId}
         onSelectAgent={id => {

@@ -51,6 +51,7 @@ import {
   ChevronRight,
   Check,
   Plus,
+  MoreHorizontal,
   Search,
   SquarePen,
   Star,
@@ -63,6 +64,10 @@ import {
 // on plain `focus` (not just `focus-visible`) or via ring-offset. ──────────
 const noFocusRing =
   'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0';
+
+// Shared portal-menu item styling for Knowledge add/options menus.
+const menuItemCls =
+  'flex w-full items-center rounded px-2 py-1.5 text-[12px] text-foreground/80 transition-colors hover:bg-foreground/[0.06] hover:text-foreground';
 
 // ─── Knowledge data shape ─────────────────────────────────────────────────────
 // A free-form tree of folders and files that can be nested arbitrarily, e.g.
@@ -98,6 +103,9 @@ interface SidebarProps {
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
   onCreateNode?: (parentId: string | null, type: KnowledgeNodeType, label: string) => void;
+  onRenameNode?: (id: string, label: string) => void;
+  onDeleteNode?: (id: string) => void;
+  onMoveNode?: (id: string, newParentId: string | null) => void;
   agents?: AgentItem[];
   activeAgentId?: string;
   onSelectAgent?: (agentId: string) => void;
@@ -222,6 +230,8 @@ function NewItemInput({
   placeholder,
   indent = false,
   depth = 0,
+  initialValue,
+  className,
   onSubmit,
   onCancel,
 }: {
@@ -229,16 +239,19 @@ function NewItemInput({
   placeholder: string;
   indent?: boolean;
   depth?: number;
+  initialValue?: string;
+  className?: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
 }) {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(initialValue ?? '');
 
   return (
     <div
       style={depth > 0 ? { paddingLeft: 8 + depth * 22 } : indent ? { paddingLeft: 28 } : undefined}
       className={cn(
         'flex h-[26px] items-center gap-1.5 rounded-md px-2',
+        className
       )}
     >
       <Icon className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
@@ -277,8 +290,6 @@ function KnowledgeAddControl({
   revealOn?: 'group' | 'node';
 }) {
   const reveal = revealOn === 'node' ? 'group-hover/node:opacity-100' : 'group-hover:opacity-100';
-  const item =
-    'flex w-full items-center rounded px-2 py-1.5 text-[12px] text-foreground/80 transition-colors hover:bg-foreground/[0.06] hover:text-foreground';
   const [hovered, setHovered] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -331,13 +342,84 @@ function KnowledgeAddControl({
             onMouseEnter={open}
             onMouseLeave={scheduleClose}
           >
-            <button onClick={() => onPick('folder')} className={cn(item, noFocusRing)}>
+            <button onClick={() => onPick('folder')} className={cn(menuItemCls, noFocusRing)}>
               Create new folder
             </button>
-            <button onClick={() => onPick('file')} className={cn(item, noFocusRing)}>
+            <button onClick={() => onPick('file')} className={cn(menuItemCls, noFocusRing)}>
               Create new file
             </button>
           </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+// Per-node options menu (⋯): Rename / Delete. Click-to-open, portaled so it
+// escapes the sidebar's overflow clipping.
+function KnowledgeOptionsControl({
+  node,
+  onRename,
+  onDelete,
+}: {
+  node: KnowledgeNode;
+  onRename: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const toggle = () => {
+    const el = triggerRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      setPos({ top: r.top, left: r.right + 4 });
+    }
+    setOpen(o => !o);
+  };
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        aria-label="Options"
+        onClick={toggle}
+        className={cn(
+          'flex h-5 w-5 shrink-0 items-center justify-center rounded text-foreground/45 opacity-0 transition-opacity hover:bg-foreground/[0.07] hover:text-foreground group-hover/node:opacity-100',
+          noFocusRing
+        )}
+      >
+        <MoreHorizontal className="h-3.5 w-3.5" />
+      </button>
+      {open && pos &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-[999]" onClick={() => setOpen(false)} />
+            <div
+              className="fixed z-[1000] min-w-[140px] rounded-md border border-border/70 bg-popover p-1 shadow-lg"
+              style={{ top: pos.top, left: pos.left }}
+            >
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  onRename(node.id);
+                }}
+                className={cn(menuItemCls, noFocusRing)}
+              >
+                Rename
+              </button>
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  onDelete(node.id);
+                }}
+                className={cn(menuItemCls, 'text-destructive hover:text-destructive', noFocusRing)}
+              >
+                Delete
+              </button>
+            </div>
+          </>,
           document.body
         )}
     </>
@@ -352,6 +434,9 @@ function KnowledgeSection({
   activeDocId,
   onSelectDoc,
   onCreateNode,
+  onRenameNode,
+  onDeleteNode,
+  onMoveNode,
 }: {
   nodes: KnowledgeNode[];
   isOpen: boolean;
@@ -360,9 +445,15 @@ function KnowledgeSection({
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
   onCreateNode?: (parentId: string | null, type: KnowledgeNodeType, label: string) => void;
+  onRenameNode?: (id: string, label: string) => void;
+  onDeleteNode?: (id: string) => void;
+  onMoveNode?: (id: string, newParentId: string | null) => void;
 }) {
   const [openNodes, setOpenNodes] = useState<Set<string>>(() => new Set());
   const [creating, setCreating] = useState<{ parentId: string | null; type: KnowledgeNodeType } | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const draggedId = useRef<string | null>(null);
 
   const toggleNode = (id: string) => {
     setOpenNodes(prev => {
@@ -383,6 +474,35 @@ function KnowledgeSection({
     setCreating(null);
   };
 
+  const onDragStart = (e: React.DragEvent, id: string) => {
+    draggedId.current = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+  const onDragEnd = () => {
+    draggedId.current = null;
+    setDragOverId(null);
+  };
+  const onNodeDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (draggedId.current && draggedId.current !== id) setDragOverId(id);
+  };
+  const onNodeDrop = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const dragId = draggedId.current;
+    setDragOverId(null);
+    if (dragId && dragId !== id) onMoveNode?.(dragId, id);
+    draggedId.current = null;
+  };
+  const onRootDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const dragId = draggedId.current;
+    setDragOverId(null);
+    if (dragId) onMoveNode?.(dragId, null);
+    draggedId.current = null;
+  };
+
   // Knowledge is hidden entirely in collapsed (icon-only) mode
   if (!isOpen) return null;
 
@@ -396,34 +516,66 @@ function KnowledgeSection({
 
     return (
       <div key={node.id} className="flex flex-col">
-        <div className="group/node flex h-[26px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]">
-          <button
-            onClick={isFolder || hasChildren ? () => toggleNode(node.id) : () => onSelectDoc?.(node.id)}
-            style={{ paddingLeft: 8 + depth * 22 }}
-            className={cn(
-              'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-[13px] transition-colors',
-              isFolder
-                ? 'text-foreground/60 hover:text-foreground/80'
-                : active
-                  ? 'bg-foreground/[0.06] font-medium text-foreground'
-                  : 'text-foreground/90 hover:text-foreground',
-              noFocusRing
-            )}
-          >
-            {expandable && (
-              <ChevronRight
-                className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
-              />
-            )}
-            <Icon
-              className={cn(
-                'h-3.5 w-3.5 shrink-0',
-                isFolder ? 'text-foreground/55' : 'text-foreground/35'
-              )}
+        <div
+          className={cn(
+            'group/node flex h-[26px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]',
+            dragOverId === node.id && 'bg-foreground/[0.06] ring-1 ring-foreground/30'
+          )}
+          draggable={!!onMoveNode}
+          onDragStart={e => onDragStart(e, node.id)}
+          onDragEnd={onDragEnd}
+          onDragOver={e => onNodeDragOver(e, node.id)}
+          onDrop={e => onNodeDrop(e, node.id)}
+        >
+          {renamingId === node.id ? (
+            <NewItemInput
+              icon={Icon}
+              initialValue={node.label}
+              placeholder="Name"
+              depth={depth}
+              className="flex-1"
+              onSubmit={label => {
+                onRenameNode?.(node.id, label);
+                setRenamingId(null);
+              }}
+              onCancel={() => setRenamingId(null)}
             />
-            <span className="flex-1 truncate text-left">{node.label}</span>
-          </button>
+          ) : (
+            <button
+              onClick={isFolder || hasChildren ? () => toggleNode(node.id) : () => onSelectDoc?.(node.id)}
+              style={{ paddingLeft: 8 + depth * 22 }}
+              className={cn(
+                'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-[13px] transition-colors',
+                isFolder
+                  ? 'text-foreground/60 hover:text-foreground/80'
+                  : active
+                    ? 'bg-foreground/[0.06] font-medium text-foreground'
+                    : 'text-foreground/90 hover:text-foreground',
+                noFocusRing
+              )}
+            >
+              {expandable && (
+                <ChevronRight
+                  className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
+                />
+              )}
+              <Icon
+                className={cn(
+                  'h-3.5 w-3.5 shrink-0',
+                  isFolder ? 'text-foreground/55' : 'text-foreground/35'
+                )}
+              />
+              <span className="flex-1 truncate text-left">{node.label}</span>
+            </button>
+          )}
           {isFolder && onCreateNode && <KnowledgeAddControl onPick={type => startCreate(node.id, type)} />}
+          {(onRenameNode || onDeleteNode) && (
+            <KnowledgeOptionsControl
+              node={node}
+              onRename={id => setRenamingId(id)}
+              onDelete={id => onDeleteNode?.(id)}
+            />
+          )}
         </div>
         {expandable && open && (
           <div className="flex flex-col">
@@ -468,7 +620,13 @@ function KnowledgeSection({
       </div>
 
       {(!sectionCollapsed || !isOpen) && (
-        <div className="flex flex-col gap-0.5">
+        <div
+          className="flex min-h-[8px] flex-col gap-0.5"
+          onDragOver={e => {
+            if (onMoveNode) e.preventDefault();
+          }}
+          onDrop={onRootDrop}
+        >
           {nodes.map(node => renderNode(node, 0))}
           {isOpen && creating?.parentId === null && (
             <NewItemInput
@@ -804,6 +962,9 @@ export function Sidebar({
   activeDocId,
   onSelectDoc,
   onCreateNode,
+  onRenameNode,
+  onDeleteNode,
+  onMoveNode,
   agents = [],
   activeAgentId,
   onSelectAgent,
@@ -933,6 +1094,9 @@ export function Sidebar({
               activeDocId={activeDocId}
               onSelectDoc={onSelectDoc}
               onCreateNode={onCreateNode}
+              onRenameNode={onRenameNode}
+              onDeleteNode={onDeleteNode}
+              onMoveNode={onMoveNode}
             />
           </nav>
         </ScrollArea>
