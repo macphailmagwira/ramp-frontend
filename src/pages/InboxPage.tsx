@@ -352,14 +352,14 @@ function InboxRow({
 
       <span
         className={cn(
-          'min-w-0 flex-[3] truncate text-sm transition-colors duration-150',
+          'w-[34%] shrink-0 truncate text-sm transition-colors duration-150',
           item.unread ? 'font-medium text-foreground' : 'text-foreground/70 group-hover:text-foreground/90'
         )}
       >
         {item.title}
       </span>
 
-      <span className="min-w-0 flex-[4]">
+      <span className="min-w-0 flex-1 pl-3">
         <NotificationSentence item={item} />
       </span>
 
