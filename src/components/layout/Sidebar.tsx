@@ -469,19 +469,25 @@ function AgentsSection({
               )}
             />
           </button>
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              onAddAgent?.();
-            }}
-            aria-label="Add agent"
-            className={cn(
-              'mr-1 flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/[0.07] group-hover:opacity-100',
-              noFocusRing
-            )}
-          >
-            <Plus className="h-3 w-3 text-foreground/45" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  onAddAgent?.();
+                }}
+                aria-label="Add agent"
+                className={cn(
+                  'group/add mr-1 flex h-5 w-5 items-center justify-center rounded text-foreground/45 transition-all duration-200 ease-out',
+                  'hover:bg-foreground/[0.07] hover:text-foreground hover:shadow-sm active:scale-90',
+                  noFocusRing
+                )}
+              >
+                <Plus className="h-3 w-3 transition-transform duration-200 ease-out group-hover/add:rotate-90 group-hover/add:scale-110" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Add agent</TooltipContent>
+          </Tooltip>
         </div>
       )}
 
@@ -501,15 +507,6 @@ function AgentsSection({
               />
             );
           })}
-
-          {/* Add new agent — nested inside the group */}
-          <Row
-            icon={Plus}
-            label="Add agent"
-            isOpen={isOpen}
-            indent={isOpen}
-            onClick={onAddAgent}
-          />
         </>
       )}
     </div>
