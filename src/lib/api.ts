@@ -1,4 +1,4 @@
-import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository, StorybookBookResponse, ArchitectureStoryResponse, ArchitectureStoryRequest } from '@/types';
+import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository, StorybookBookResponse, ArchitectureStoryResponse } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -116,12 +116,6 @@ export const api = {
     },
   },
 
-  architecture: {
-    getGraph: async (repoId: string) => {
-      return request<ArchitectureGraph>(`/github/${repoId}/architecture`);
-    },
-  },
-
   flow: {
     getFlow: async (
       repoId: string,
@@ -144,12 +138,36 @@ export const api = {
   },
 
   ai: {
+    getArchitectureStory: async (
+      repoId: string
+    ): Promise<ArchitectureStoryResponse | null> => {
+      try {
+        return await request<ArchitectureStoryResponse>(`/ai/architecture-story/${repoId}`, {
+          method: 'GET',
+        });
+      } catch (err) {
+        if (err instanceof Error && (err as Error & { status?: number }).status === 404) {
+          return null;
+        }
+        throw err;
+      }
+    },
+
     generateArchitectureStory: async (
-      payload: ArchitectureStoryRequest
+      repoId: string
     ): Promise<ArchitectureStoryResponse> => {
-      return request<ArchitectureStoryResponse>('/ai/architecture-story', {
+      return request<ArchitectureStoryResponse>(`/ai/architecture-story/${repoId}`, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: '{}',
+      });
+    },
+
+    regenerateArchitectureStory: async (
+      repoId: string
+    ): Promise<ArchitectureStoryResponse> => {
+      return request<ArchitectureStoryResponse>(`/ai/architecture-story/${repoId}/regenerate`, {
+        method: 'POST',
+        body: '{}',
       });
     },
 

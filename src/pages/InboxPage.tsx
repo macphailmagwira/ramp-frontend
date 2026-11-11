@@ -335,20 +335,22 @@ function InboxRow({
       type="button"
       onClick={onOpen}
       className={cn(
-        'group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/[0.045] sm:px-6 lg:px-10',
+        'group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out hover:bg-white/[0.045] hover:shadow-[inset_2px_0_0_0_rgba(56,189,248,0.55)] active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 sm:px-6 lg:px-10',
         index % 2 === 1 && 'bg-white/[0.015]'
       )}
     >
       <span className="flex w-3.5 shrink-0 justify-center">
-        {item.unread && <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />}
+        {item.unread && (
+          <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_0_3px_rgba(56,189,248,0.18)] ring-2 ring-sky-400/0 transition-all duration-200 group-hover:ring-sky-400/30" />
+        )}
       </span>
 
-      <meta.icon className={cn('h-[15px] w-[15px] shrink-0', meta.className)} strokeWidth={1.9} />
+      <meta.icon className={cn('h-[15px] w-[15px] shrink-0 transition-transform duration-150 group-hover:scale-110', meta.className)} strokeWidth={1.9} />
 
       <span
         className={cn(
-          'min-w-0 flex-[3] truncate text-sm',
-          item.unread ? 'font-medium text-foreground' : 'text-foreground/70'
+          'min-w-0 flex-[3] truncate text-sm transition-colors duration-150',
+          item.unread ? 'font-medium text-foreground' : 'text-foreground/70 group-hover:text-foreground/90'
         )}
       >
         {item.title}
@@ -366,7 +368,7 @@ function InboxRow({
       )}
 
       {item.replies && (
-        <span className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-xs tabular-nums text-muted-foreground sm:flex">
+        <span className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-xs tabular-nums text-muted-foreground transition-colors duration-150 group-hover:border-border/80 group-hover:bg-white/[0.04] sm:flex">
           {item.replies}
         </span>
       )}
@@ -401,7 +403,7 @@ function ExpandedPanel({
 }) {
   const meta = CATEGORY_META[item.category];
   return (
-    <div className="mx-2 my-1.5 overflow-hidden rounded-lg border border-border bg-card sm:mx-4 lg:mx-8">
+    <div className="animate-in fade-in-0 slide-in-from-top-1 duration-200 overflow-hidden bg-white/[0.03] shadow-[inset_3px_0_0_0_rgba(56,189,248,0.7)]">
       {/* Breadcrumb + title + toolbar */}
       <div className="flex items-start justify-between gap-4 px-5 pt-4">
         <div className="min-w-0">

@@ -12,7 +12,7 @@ import { Spinner } from '@/components/ui/spinner';
 import {
   Network, Layers, Component, File, ZoomIn, ZoomOut, Maximize2, X,
   ChevronRight, ChevronLeft, ArrowRight, AlertCircle,
-  MousePointerClick, Info, Expand, Shrink,
+  MousePointerClick, Info, Expand, Shrink, RefreshCw,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -334,13 +334,10 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
     (async () => {
       setLoading(true); setError(null);
       try {
-        const dep = await api.architecture.getGraph(repoId) as {
-          file_nodes?: { id: string }[];
-          file_edges?: { source: string; target: string }[];
-        } | null;
-        const files = (dep?.file_nodes ?? []).map(n => n.id).filter(Boolean);
-        const edges = (dep?.file_edges ?? []).map(e => ({ source: e.source, target: e.target }));
-        const data = await api.ai.generateArchitectureStory({ repo_id: repoId, files, edges });
+        // 1) Instant cached load (no LLM pass)
+        let data = await api.ai.getArchitectureStory(repoId);
+        // 2) First time for this repo → generate + persist (happens once)
+        if (!data) data = await api.ai.generateArchitectureStory(repoId);
         if (!cancelled) {
           setTree(data);
           setPath([]);
@@ -355,6 +352,22 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoId]);
+
+  const handleRegenerate = useCallback(async () => {
+    if (!repoId) return;
+    setLoading(true); setError(null);
+    try {
+      const data = await api.ai.regenerateArchitectureStory(repoId);
+      setTree(data);
+      setPath([]);
+      setSelectedNode(data?.root?.id ?? null);
+      setPanelOpen(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to regenerate architecture');
+    } finally {
+      setLoading(false);
+    }
   }, [repoId]);
 
   const root = tree?.root ?? null;
@@ -611,6 +624,15 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}</TooltipContent>
+              </Tooltip>
+              <Separator orientation="vertical" className="mx-0.5 h-4" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRegenerate} disabled={loading || !repoId}>
+                    <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Regenerate architecture</TooltipContent>
               </Tooltip>
             </div>
           </div>
