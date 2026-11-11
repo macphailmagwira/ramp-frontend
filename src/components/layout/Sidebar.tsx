@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { gradientFor, initialsOf } from '@/lib/avatar';
 import type { ViewState, Repository, User } from '@/types';
@@ -39,7 +40,7 @@ import {
   GitPullRequest,
   GitCommit,
   Folder,
-  FileText,
+  File,
   Users,
   Settings,
   PanelLeftClose,
@@ -64,18 +65,16 @@ const noFocusRing =
   'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0';
 
 // ─── Knowledge data shape ─────────────────────────────────────────────────────
-// Docs are grouped into categories, e.g. { id: 'getting-started', label: 'Getting started',
-// docs: [{ id: 'setup', label: 'Setup guide' }, ...] }
+// A free-form tree of folders and files that can be nested arbitrarily, e.g.
+// { id, type: 'folder', label, children: [ { id, type: 'file', label }, … ] }
 
-export interface KnowledgeDoc {
-  id: string;
-  label: string;
-}
+export type KnowledgeNodeType = 'folder' | 'file';
 
-export interface KnowledgeCategory {
+export interface KnowledgeNode {
   id: string;
+  type: KnowledgeNodeType;
   label: string;
-  docs: KnowledgeDoc[];
+  children?: KnowledgeNode[];
 }
 
 export interface AgentItem {
@@ -95,11 +94,10 @@ interface SidebarProps {
   onAddRepository?: () => void;
   user: User | null;
   onLogout?: () => void;
-  knowledgeCategories?: KnowledgeCategory[];
+  knowledgeNodes?: KnowledgeNode[];
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
-  onCreateCategory?: (label: string) => void;
-  onCreateDoc?: (categoryId: string, label: string) => void;
+  onCreateNode?: (parentId: string | null, type: KnowledgeNodeType, label: string) => void;
   agents?: AgentItem[];
   activeAgentId?: string;
   onSelectAgent?: (agentId: string) => void;
@@ -135,6 +133,7 @@ function Row({
   onClick,
   badge,
   indent = false,
+  depth = 0,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
@@ -143,16 +142,17 @@ function Row({
   onClick?: () => void;
   badge?: string;
   indent?: boolean;
+  depth?: number;
 }) {
   const row = (
     <button
       onClick={onClick}
       aria-current={isActive ? 'page' : undefined}
+      style={isOpen ? { paddingLeft: depth > 0 ? 8 + depth * 14 : indent ? 28 : 8 } : undefined}
       className={cn(
         'group flex h-[30px] w-full items-center gap-2 rounded-md text-sm transition-colors',
         noFocusRing,
         isOpen ? 'px-2' : 'justify-center px-0',
-        indent && isOpen && 'pl-7',
         isActive
           ? 'bg-foreground/[0.06] font-medium text-foreground'
           : 'text-foreground/80 hover:bg-foreground/[0.045]'
@@ -221,12 +221,14 @@ function NewItemInput({
   icon: Icon,
   placeholder,
   indent = false,
+  depth = 0,
   onSubmit,
   onCancel,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   placeholder: string;
   indent?: boolean;
+  depth?: number;
   onSubmit: (value: string) => void;
   onCancel: () => void;
 }) {
@@ -234,9 +236,9 @@ function NewItemInput({
 
   return (
     <div
+      style={depth > 0 ? { paddingLeft: 8 + depth * 22 } : indent ? { paddingLeft: 28 } : undefined}
       className={cn(
         'flex h-[26px] items-center gap-1.5 rounded-md px-2',
-        indent && 'pl-7'
       )}
     >
       <Icon className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
@@ -262,170 +264,222 @@ function NewItemInput({
   );
 }
 
-// ─── Knowledge section — categories of docs, each independently collapsible ──
+// ─── Knowledge section — a free-form tree of folders & files ──────────────────
+
+// Hover-reveal add control: a "+" that opens a small text dropdown to pick
+// a folder or a file. The menu is portaled to <body> so the sidebar's
+// overflow-hidden scroll area can't clip it or hide it behind the main view.
+function KnowledgeAddControl({
+  onPick,
+  revealOn = 'node',
+}: {
+  onPick: (type: KnowledgeNodeType) => void;
+  revealOn?: 'group' | 'node';
+}) {
+  const reveal = revealOn === 'node' ? 'group-hover/node:opacity-100' : 'group-hover:opacity-100';
+  const item =
+    'flex w-full items-center rounded px-2 py-1.5 text-[12px] text-foreground/80 transition-colors hover:bg-foreground/[0.06] hover:text-foreground';
+  const [hovered, setHovered] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<number | null>(null);
+
+  const open = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    const el = triggerRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      setPos({ top: r.top, left: r.right + 4 });
+    }
+    setHovered(true);
+  };
+
+  const scheduleClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setHovered(false), 120);
+  };
+
+  return (
+    <>
+      <div
+        className={cn(
+          'flex shrink-0 items-center opacity-0 transition-opacity duration-200',
+          reveal
+        )}
+      >
+        <button
+          ref={triggerRef}
+          aria-label="Add"
+          onMouseEnter={open}
+          onMouseLeave={scheduleClose}
+          className={cn(
+            'flex h-5 w-5 items-center justify-center rounded text-foreground/45 transition-transform duration-200 ease-out hover:bg-foreground/[0.07] hover:text-foreground',
+            noFocusRing
+          )}
+        >
+          <Plus className="h-3 w-3" />
+        </button>
+      </div>
+      {hovered && pos &&
+        createPortal(
+          <div
+            className="fixed z-[1000] min-w-[150px] rounded-md border border-border/70 bg-popover p-1 shadow-lg"
+            style={{ top: pos.top, left: pos.left }}
+            onMouseEnter={open}
+            onMouseLeave={scheduleClose}
+          >
+            <button onClick={() => onPick('folder')} className={cn(item, noFocusRing)}>
+              Create new folder
+            </button>
+            <button onClick={() => onPick('file')} className={cn(item, noFocusRing)}>
+              Create new file
+            </button>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
 
 function KnowledgeSection({
-  categories,
+  nodes,
   isOpen,
   sectionCollapsed,
   onToggleSection,
   activeDocId,
   onSelectDoc,
-  onCreateCategory,
-  onCreateDoc,
+  onCreateNode,
 }: {
-  categories: KnowledgeCategory[];
+  nodes: KnowledgeNode[];
   isOpen: boolean;
   sectionCollapsed: boolean;
   onToggleSection: () => void;
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
-  onCreateCategory?: (label: string) => void;
-  onCreateDoc?: (categoryId: string, label: string) => void;
+  onCreateNode?: (parentId: string | null, type: KnowledgeNodeType, label: string) => void;
 }) {
-  const [openCategories, setOpenCategories] = useState<Set<string>>(
-    () => new Set(categories.map(c => c.id))
-  );
-  const [creatingCategory, setCreatingCategory] = useState(false);
-  const [creatingDocFor, setCreatingDocFor] = useState<string | null>(null);
+  const [openNodes, setOpenNodes] = useState<Set<string>>(() => new Set());
+  const [creating, setCreating] = useState<{ parentId: string | null; type: KnowledgeNodeType } | null>(null);
 
-  const toggleCategory = (id: string) => {
-    setOpenCategories(prev => {
+  const toggleNode = (id: string) => {
+    setOpenNodes(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
-  const createCategory = (label: string) => {
-    if (label.trim()) onCreateCategory?.(label.trim());
-    setCreatingCategory(false);
+  const startCreate = (parentId: string | null, type: KnowledgeNodeType) => {
+    setCreating({ parentId, type });
+    if (parentId) setOpenNodes(prev => new Set(prev).add(parentId));
   };
 
-  const createDoc = (categoryId: string, label: string) => {
-    if (label.trim()) onCreateDoc?.(categoryId, label.trim());
-    setCreatingDocFor(null);
+  const submitCreate = (parentId: string | null, type: KnowledgeNodeType, label: string) => {
+    if (label.trim()) onCreateNode?.(parentId, type, label.trim());
+    setCreating(null);
   };
 
   // Knowledge is hidden entirely in collapsed (icon-only) mode
   if (!isOpen) return null;
 
-  return (
-    <div className="flex flex-col gap-0.5">
-      {isOpen && (
-        <div className="group flex h-6 w-full items-center gap-1 rounded">
+  const renderNode = (node: KnowledgeNode, depth: number): React.ReactNode => {
+    const isFolder = node.type === 'folder';
+    const open = openNodes.has(node.id);
+    const hasChildren = (node.children?.length ?? 0) > 0;
+    const expandable = isFolder || hasChildren;
+    const active = !isFolder && activeDocId === node.id;
+    const Icon = isFolder ? Folder : File;
+
+    return (
+      <div key={node.id} className="flex flex-col">
+        <div className="group/node flex h-[26px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]">
           <button
-            onClick={onToggleSection}
+            onClick={isFolder || hasChildren ? () => toggleNode(node.id) : () => onSelectDoc?.(node.id)}
+            style={{ paddingLeft: 8 + depth * 22 }}
             className={cn(
-              'flex h-6 flex-1 items-center gap-1 rounded px-2 text-xs font-medium text-foreground/40 hover:text-foreground/65',
+              'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-[13px] transition-colors',
+              isFolder
+                ? 'text-foreground/60 hover:text-foreground/80'
+                : active
+                  ? 'bg-foreground/[0.06] font-medium text-foreground'
+                  : 'text-foreground/90 hover:text-foreground',
               noFocusRing
             )}
           >
-            <span>Knowledge</span>
-            <ChevronRight
+            {expandable && (
+              <ChevronRight
+                className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
+              />
+            )}
+            <Icon
               className={cn(
-                'h-3 w-3 shrink-0 opacity-0 transition-transform group-hover:opacity-100',
-                !sectionCollapsed && 'rotate-90'
+                'h-3.5 w-3.5 shrink-0',
+                isFolder ? 'text-foreground/55' : 'text-foreground/35'
               )}
             />
+            <span className="flex-1 truncate text-left">{node.label}</span>
           </button>
-          {onCreateCategory && (
-            <button
-              onClick={e => {
-                e.stopPropagation();
-                setCreatingCategory(true);
-              }}
-              aria-label="New category"
-              className={cn(
-                'mr-1 flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/[0.07] group-hover:opacity-100',
-                noFocusRing
-              )}
-            >
-              <Plus className="h-3 w-3 text-foreground/45" />
-            </button>
+          {isFolder && onCreateNode && <KnowledgeAddControl onPick={type => startCreate(node.id, type)} />}
+        </div>
+        {expandable && open && (
+          <div className="flex flex-col">
+            {(node.children ?? []).map(child => renderNode(child, depth + 1))}
+            {creating?.parentId === node.id && (
+              <NewItemInput
+                key="__new"
+                icon={creating.type === 'folder' ? Folder : File}
+                placeholder={creating.type === 'folder' ? 'New folder' : 'New file'}
+                depth={depth + 1}
+                onSubmit={label => submitCreate(node.id, creating.type, label)}
+                onCancel={() => setCreating(null)}
+              />
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="group flex h-6 w-full items-center gap-1 rounded">
+        <button
+          onClick={onToggleSection}
+          className={cn(
+            'flex h-6 flex-1 items-center gap-1 rounded px-2 text-xs font-medium text-foreground/40 hover:text-foreground/65',
+            noFocusRing
+          )}
+        >
+          <span>Knowledge</span>
+          <ChevronRight
+            className={cn(
+              'h-3 w-3 shrink-0 opacity-0 transition-transform group-hover:opacity-100',
+              !sectionCollapsed && 'rotate-90'
+            )}
+          />
+        </button>
+        {onCreateNode && (
+          <KnowledgeAddControl revealOn="group" onPick={type => startCreate(null, type)} />
+        )}
+      </div>
+
+      {(!sectionCollapsed || !isOpen) && (
+        <div className="flex flex-col gap-0.5">
+          {nodes.map(node => renderNode(node, 0))}
+          {isOpen && creating?.parentId === null && (
+            <NewItemInput
+              key="__new-root"
+              icon={creating.type === 'folder' ? Folder : File}
+              placeholder={creating.type === 'folder' ? 'New folder' : 'New file'}
+              onSubmit={label => submitCreate(null, creating.type, label)}
+              onCancel={() => setCreating(null)}
+            />
           )}
         </div>
-      )}
-
-      {(!sectionCollapsed || !isOpen) &&
-        categories.map(category => {
-          const catOpen = openCategories.has(category.id);
-          return (
-            <div key={category.id} className="group/cat">
-              {isOpen && (
-                <div className="group flex h-[26px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]">
-                  <button
-                    onClick={() => toggleCategory(category.id)}
-                    className={cn(
-                      'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md pl-2 text-[13px] text-foreground/65 hover:text-foreground/85',
-                      noFocusRing
-                    )}
-                  >
-                    <ChevronRight
-                      className={cn(
-                        'h-3 w-3 shrink-0 text-foreground/40 transition-transform',
-                        catOpen && 'rotate-90'
-                      )}
-                    />
-                    <Folder className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
-                    <span className="flex-1 truncate text-left">{category.label}</span>
-                  </button>
-                  {onCreateDoc && (
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        setCreatingDocFor(category.id);
-                        setOpenCategories(prev => new Set(prev).add(category.id));
-                      }}
-                      aria-label={`New document in ${category.label}`}
-                      className={cn(
-                        'flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/[0.07] group-hover:opacity-100',
-                        noFocusRing
-                      )}
-                    >
-                      <Plus className="h-3 w-3 text-foreground/45" />
-                    </button>
-                  )}
-                </div>
-              )}
-              {(catOpen || !isOpen) && (
-                <>
-                  {category.docs.map(doc => (
-                    <Row
-                      key={doc.id}
-                      icon={FileText}
-                      label={doc.label}
-                      isActive={activeDocId === doc.id}
-                      isOpen={isOpen}
-                      indent={isOpen}
-                      onClick={() => onSelectDoc?.(doc.id)}
-                    />
-                  ))}
-                  {isOpen && creatingDocFor === category.id && (
-                    <NewItemInput
-                      icon={FileText}
-                      indent
-                      placeholder="New document"
-                      onSubmit={label => createDoc(category.id, label)}
-                      onCancel={() => setCreatingDocFor(null)}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })}
-      {isOpen && creatingCategory && (
-        <NewItemInput
-          icon={Folder}
-          placeholder="New category"
-          onSubmit={createCategory}
-          onCancel={() => setCreatingCategory(false)}
-        />
       )}
     </div>
   );
@@ -746,11 +800,10 @@ export function Sidebar({
   onAddRepository,
   user,
   onLogout,
-  knowledgeCategories = [],
+  knowledgeNodes = [],
   activeDocId,
   onSelectDoc,
-  onCreateCategory,
-  onCreateDoc,
+  onCreateNode,
   agents = [],
   activeAgentId,
   onSelectAgent,
@@ -873,14 +926,13 @@ export function Sidebar({
 
             {/* Knowledge */}
             <KnowledgeSection
-              categories={knowledgeCategories}
+              nodes={knowledgeNodes}
               isOpen={isOpen}
               sectionCollapsed={knowledgeCollapsed}
               onToggleSection={() => setKnowledgeCollapsed(v => !v)}
               activeDocId={activeDocId}
               onSelectDoc={onSelectDoc}
-              onCreateCategory={onCreateCategory}
-              onCreateDoc={onCreateDoc}
+              onCreateNode={onCreateNode}
             />
           </nav>
         </ScrollArea>

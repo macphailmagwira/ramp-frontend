@@ -15,7 +15,7 @@ import { mockTeamMembers } from '@/data/mock';
 import { api, getToken, setToken } from '@/lib/api';
 
 // Layout Components
-import { Sidebar, type KnowledgeCategory, type AgentItem } from '@/components/layout/Sidebar';
+import { Sidebar, type KnowledgeNode, type AgentItem } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 
 // Auth Pages
@@ -111,30 +111,33 @@ function AppContent() {
     const t = setTimeout(() => setIsSidebarOpen(true), 500);
     return () => clearTimeout(t);
   }, [isAuthenticating]);
-  const [knowledgeCategories, setKnowledgeCategories] = useState<KnowledgeCategory[]>(() => [
+  const [knowledgeNodes, setKnowledgeNodes] = useState<KnowledgeNode[]>(() => [
     {
       id: 'getting-started',
+      type: 'folder',
       label: 'Getting started',
-      docs: [
-        { id: 'setup-guide', label: 'Setup guide' },
-        { id: 'onboarding', label: 'Onboarding' },
+      children: [
+        { id: 'setup-guide', type: 'file', label: 'Setup guide' },
+        { id: 'onboarding', type: 'file', label: 'Onboarding' },
       ],
     },
     {
       id: 'architecture',
+      type: 'folder',
       label: 'Architecture',
-      docs: [
-        { id: 'system-overview', label: 'System overview' },
-        { id: 'data-flow', label: 'Data flow' },
-        { id: 'api-contracts', label: 'API contracts' },
+      children: [
+        { id: 'system-overview', type: 'file', label: 'System overview' },
+        { id: 'data-flow', type: 'file', label: 'Data flow' },
+        { id: 'api-contracts', type: 'file', label: 'API contracts' },
       ],
     },
     {
       id: 'runbooks',
+      type: 'folder',
       label: 'Runbooks',
-      docs: [
-        { id: 'deploy', label: 'Deploy' },
-        { id: 'rollback', label: 'Rollback' },
+      children: [
+        { id: 'deploy', type: 'file', label: 'Deploy' },
+        { id: 'rollback', type: 'file', label: 'Rollback' },
       ],
     },
   ]);
@@ -320,20 +323,31 @@ function AppContent() {
 
   const handleNavigate = (newView: ViewState) => setView(newView);
 
-  const handleCreateCategory = (label: string) => {
-    setKnowledgeCategories(prev => [
-      ...prev,
-      { id: crypto.randomUUID(), label, docs: [] },
-    ]);
+  const insertKnowledgeNode = (
+    nodes: KnowledgeNode[],
+    parentId: string | null,
+    newNode: KnowledgeNode
+  ): KnowledgeNode[] => {
+    if (parentId === null) return [...nodes, newNode];
+    return nodes.map(n => {
+      if (n.id === parentId && n.type === 'folder') {
+        return { ...n, children: [...(n.children ?? []), newNode] };
+      }
+      if (n.children) {
+        return { ...n, children: insertKnowledgeNode(n.children, parentId, newNode) };
+      }
+      return n;
+    });
   };
 
-  const handleCreateDoc = (categoryId: string, label: string) => {
-    setKnowledgeCategories(prev =>
-      prev.map(c =>
-        c.id === categoryId
-          ? { ...c, docs: [...c.docs, { id: crypto.randomUUID(), label }] }
-          : c
-      )
+  const handleCreateNode = (parentId: string | null, type: KnowledgeNode['type'], label: string) => {
+    setKnowledgeNodes(prev =>
+      insertKnowledgeNode(prev, parentId, {
+        id: crypto.randomUUID(),
+        type,
+        label,
+        ...(type === 'folder' ? { children: [] } : {}),
+      })
     );
   };
 
@@ -486,11 +500,10 @@ function AppContent() {
         onAddRepository={handleAddRepository}
         user={user}
         onLogout={handleLogout}
-        knowledgeCategories={knowledgeCategories}
+        knowledgeNodes={knowledgeNodes}
         activeDocId={activeDocId}
         onSelectDoc={setActiveDocId}
-        onCreateCategory={handleCreateCategory}
-        onCreateDoc={handleCreateDoc}
+        onCreateNode={handleCreateNode}
         agents={exampleAgents}
         activeAgentId={activeAgentId}
         onSelectAgent={id => {
