@@ -353,7 +353,9 @@ function InboxRow({
       <span
         className={cn(
           'w-[34%] shrink-0 truncate text-sm transition-colors duration-150',
-          item.unread ? 'font-medium text-foreground' : 'text-foreground/70 group-hover:text-foreground/90'
+          item.unread
+            ? 'font-medium text-foreground dark:text-white'
+            : 'text-foreground/70 dark:text-white/70 group-hover:text-foreground/90 dark:group-hover:text-white/90'
         )}
       >
         {item.title}
@@ -435,7 +437,7 @@ function ExpandedPanel({
         </div>
       </div>
 
-      <p className="px-5 pb-4 pt-3 text-sm leading-relaxed text-muted-foreground">{item.preview}</p>
+      <p className="px-5 pb-4 pt-3 text-sm leading-relaxed text-muted-foreground dark:text-white/80">{item.preview}</p>
 
       <Separator />
 
