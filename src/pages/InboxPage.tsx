@@ -476,7 +476,7 @@ function DateGroup({
   return (
     <div className="mb-1">
       <p className="px-4 pb-2 pt-5 text-sm font-semibold text-foreground sm:px-6 lg:px-10">{label}</p>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col divide-y divide-border/40 overflow-hidden rounded-lg border border-border/40">
         {items.map((item, index) =>
           expandedId === item.id ? (
             <ExpandedPanel
