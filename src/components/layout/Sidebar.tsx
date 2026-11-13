@@ -571,7 +571,7 @@ function WorkspaceNodes({
               onClick={isFolder || hasChildren ? () => toggleNode(node.id) : () => onSelectDoc?.(node.id)}
               style={{ paddingLeft: 8 + depth * 22 }}
               className={cn(
-                'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-[13px] transition-colors',
+                'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm transition-colors',
                 isFolder
                   ? 'text-foreground/60 hover:text-foreground/80'
                   : active
@@ -741,7 +741,7 @@ function WorkspaceSection({
                     onClick={() => toggleWs(ws.id)}
                     style={{ paddingLeft: 8 }}
                     className={cn(
-                      'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-[13px] transition-colors',
+                      'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm transition-colors',
                       open ? 'text-foreground/80' : 'text-foreground/70 hover:text-foreground/90',
                       noFocusRing
                     )}
@@ -749,7 +749,7 @@ function WorkspaceSection({
                     <ChevronRight
                       className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
                     />
-                    <span className="text-[13px] leading-none">{ws.icon}</span>
+                    <span className="text-sm leading-none">{ws.icon}</span>
                     <span className="flex-1 truncate text-left">{ws.label}</span>
                   </button>
                   <KnowledgeOptionsControl
