@@ -15,7 +15,7 @@ import { mockTeamMembers } from '@/data/mock';
 import { api, getToken, setToken } from '@/lib/api';
 
 // Layout Components
-import { Sidebar, type KnowledgeNode, type AgentItem } from '@/components/layout/Sidebar';
+import { Sidebar, type KnowledgeNode, type Workspace, type AgentItem } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 
 // Auth Pages
@@ -111,33 +111,40 @@ function AppContent() {
     const t = setTimeout(() => setIsSidebarOpen(true), 500);
     return () => clearTimeout(t);
   }, [isAuthenticating]);
-  const [knowledgeNodes, setKnowledgeNodes] = useState<KnowledgeNode[]>(() => [
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(() => [
     {
-      id: 'getting-started',
-      type: 'folder',
-      label: 'Getting started',
-      children: [
-        { id: 'setup-guide', type: 'file', label: 'Setup guide' },
-        { id: 'onboarding', type: 'file', label: 'Onboarding' },
-      ],
-    },
-    {
-      id: 'architecture',
-      type: 'folder',
-      label: 'Architecture',
-      children: [
-        { id: 'system-overview', type: 'file', label: 'System overview' },
-        { id: 'data-flow', type: 'file', label: 'Data flow' },
-        { id: 'api-contracts', type: 'file', label: 'API contracts' },
-      ],
-    },
-    {
-      id: 'runbooks',
-      type: 'folder',
-      label: 'Runbooks',
-      children: [
-        { id: 'deploy', type: 'file', label: 'Deploy' },
-        { id: 'rollback', type: 'file', label: 'Rollback' },
+      id: 'ws-engineering',
+      label: 'Engineering',
+      icon: '📘',
+      nodes: [
+        {
+          id: 'getting-started',
+          type: 'folder',
+          label: 'Getting started',
+          children: [
+            { id: 'setup-guide', type: 'file', label: 'Setup guide' },
+            { id: 'onboarding', type: 'file', label: 'Onboarding' },
+          ],
+        },
+        {
+          id: 'architecture',
+          type: 'folder',
+          label: 'Architecture',
+          children: [
+            { id: 'system-overview', type: 'file', label: 'System overview' },
+            { id: 'data-flow', type: 'file', label: 'Data flow' },
+            { id: 'api-contracts', type: 'file', label: 'API contracts' },
+          ],
+        },
+        {
+          id: 'runbooks',
+          type: 'folder',
+          label: 'Runbooks',
+          children: [
+            { id: 'deploy', type: 'file', label: 'Deploy' },
+            { id: 'rollback', type: 'file', label: 'Rollback' },
+          ],
+        },
       ],
     },
   ]);
@@ -340,8 +347,8 @@ function AppContent() {
     });
   };
 
-  const handleCreateNode = (parentId: string | null, type: KnowledgeNode['type'], label: string) => {
-    setKnowledgeNodes(prev =>
+  const handleCreateNode = (workspaceId: string, parentId: string | null, type: KnowledgeNode['type'], label: string) => {
+    updateWorkspaceNodes(workspaceId, prev =>
       insertKnowledgeNode(prev, parentId, {
         id: crypto.randomUUID(),
         type,
@@ -400,23 +407,40 @@ function AppContent() {
       return n;
     });
 
-  const handleRenameNode = (id: string, label: string) => {
+  const handleRenameNode = (workspaceId: string, id: string, label: string) => {
     if (!label.trim()) return;
-    setKnowledgeNodes(prev => renameKnowledgeNode(prev, id, label.trim()));
+    updateWorkspaceNodes(workspaceId, prev => renameKnowledgeNode(prev, id, label.trim()));
   };
 
-  const handleDeleteNode = (id: string) => {
-    setKnowledgeNodes(prev => removeKnowledgeNode(prev, id).tree);
+  const handleDeleteNode = (workspaceId: string, id: string) => {
+    updateWorkspaceNodes(workspaceId, prev => removeKnowledgeNode(prev, id).tree);
   };
 
-  const handleMoveNode = (id: string, newParentId: string | null) => {
-    setKnowledgeNodes(prev => {
+  const handleMoveNode = (workspaceId: string, id: string, newParentId: string | null) => {
+    updateWorkspaceNodes(workspaceId, prev => {
       // Prevent dropping a node into its own subtree.
       if (newParentId !== null && isKnowledgeDescendant(prev, id, newParentId)) return prev;
       const { tree, removed } = removeKnowledgeNode(prev, id);
       if (!removed) return prev;
       return insertKnowledgeNode(tree, newParentId, removed);
     });
+  };
+
+  const updateWorkspaceNodes = (
+    wsId: string,
+    updater: (nodes: KnowledgeNode[]) => KnowledgeNode[]
+  ) => setWorkspaces(prev => prev.map(w => (w.id === wsId ? { ...w, nodes: updater(w.nodes) } : w)));
+
+  const handleCreateWorkspace = (label: string, icon: string) => {
+    setWorkspaces(prev => [...prev, { id: crypto.randomUUID(), label, icon, nodes: [] }]);
+  };
+
+  const handleRenameWorkspace = (id: string, label: string, icon: string) => {
+    setWorkspaces(prev => prev.map(w => (w.id === id ? { ...w, label, icon } : w)));
+  };
+
+  const handleDeleteWorkspace = (id: string) => {
+    setWorkspaces(prev => prev.filter(w => w.id !== id));
   };
 
   if (isAuthenticating) {
@@ -568,9 +592,12 @@ function AppContent() {
         onAddRepository={handleAddRepository}
         user={user}
         onLogout={handleLogout}
-        knowledgeNodes={knowledgeNodes}
+        workspaces={workspaces}
         activeDocId={activeDocId}
         onSelectDoc={setActiveDocId}
+        onCreateWorkspace={handleCreateWorkspace}
+        onRenameWorkspace={handleRenameWorkspace}
+        onDeleteWorkspace={handleDeleteWorkspace}
         onCreateNode={handleCreateNode}
         onRenameNode={handleRenameNode}
         onDeleteNode={handleDeleteNode}

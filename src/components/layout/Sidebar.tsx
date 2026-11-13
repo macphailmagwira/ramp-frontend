@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { gradientFor, initialsOf } from '@/lib/avatar';
@@ -69,9 +69,9 @@ const noFocusRing =
 const menuItemCls =
   'flex w-full items-center rounded px-2 py-1.5 text-[12px] text-foreground/80 transition-colors hover:bg-foreground/[0.06] hover:text-foreground';
 
-// ─── Knowledge data shape ─────────────────────────────────────────────────────
-// A free-form tree of folders and files that can be nested arbitrarily, e.g.
-// { id, type: 'folder', label, children: [ { id, type: 'file', label }, … ] }
+// ─── Workspace + node data shapes ─────────────────────────────────────────────
+// A workspace owns a free-form tree of folders & files. The tree node:
+// { id, type: 'folder' | 'file', label, children?: [...] }
 
 export type KnowledgeNodeType = 'folder' | 'file';
 
@@ -81,6 +81,18 @@ export interface KnowledgeNode {
   label: string;
   children?: KnowledgeNode[];
 }
+
+export interface Workspace {
+  id: string;
+  label: string;
+  icon: string; // emoji
+  nodes: KnowledgeNode[];
+}
+
+const WORKSPACE_ICONS = [
+  '📘', '📗', '📙', '📒', '📓', '🗂️', '📁', '📚', '🧠', '💡',
+  '🚀', '⚙️', '🔧', '🧪', '📊', '🎯', '🌱', '🔥', '⭐', '🧩',
+];
 
 export interface AgentItem {
   id: string;
@@ -99,13 +111,16 @@ interface SidebarProps {
   onAddRepository?: () => void;
   user: User | null;
   onLogout?: () => void;
-  knowledgeNodes?: KnowledgeNode[];
+  workspaces?: Workspace[];
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
-  onCreateNode?: (parentId: string | null, type: KnowledgeNodeType, label: string) => void;
-  onRenameNode?: (id: string, label: string) => void;
-  onDeleteNode?: (id: string) => void;
-  onMoveNode?: (id: string, newParentId: string | null) => void;
+  onCreateWorkspace?: (label: string, icon: string) => void;
+  onRenameWorkspace?: (id: string, label: string, icon: string) => void;
+  onDeleteWorkspace?: (id: string) => void;
+  onCreateNode?: (workspaceId: string, parentId: string | null, type: KnowledgeNodeType, label: string) => void;
+  onRenameNode?: (workspaceId: string, id: string, label: string) => void;
+  onDeleteNode?: (workspaceId: string, id: string) => void;
+  onMoveNode?: (workspaceId: string, id: string, newParentId: string | null) => void;
   agents?: AgentItem[];
   activeAgentId?: string;
   onSelectAgent?: (agentId: string) => void;
@@ -361,10 +376,12 @@ function KnowledgeOptionsControl({
   node,
   onRename,
   onDelete,
+  reveal = 'group-hover/node:opacity-100',
 }: {
   node: KnowledgeNode;
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
+  reveal?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -386,7 +403,8 @@ function KnowledgeOptionsControl({
         aria-label="Options"
         onClick={toggle}
         className={cn(
-          'flex h-5 w-5 shrink-0 items-center justify-center rounded text-foreground/45 opacity-0 transition-opacity hover:bg-foreground/[0.07] hover:text-foreground group-hover/node:opacity-100',
+          'flex h-5 w-5 shrink-0 items-center justify-center rounded text-foreground/45 opacity-0 transition-opacity hover:bg-foreground/[0.07] hover:text-foreground',
+          reveal,
           noFocusRing
         )}
       >
@@ -426,31 +444,34 @@ function KnowledgeOptionsControl({
   );
 }
 
-function KnowledgeSection({
+// ─── Workspace nodes: a free-form tree of folders & files inside one workspace ─
+
+function WorkspaceNodes({
+  workspaceId,
   nodes,
   isOpen,
-  sectionCollapsed,
-  onToggleSection,
   activeDocId,
   onSelectDoc,
+  creating,
+  onStartCreate,
   onCreateNode,
   onRenameNode,
   onDeleteNode,
   onMoveNode,
 }: {
+  workspaceId: string;
   nodes: KnowledgeNode[];
   isOpen: boolean;
-  sectionCollapsed: boolean;
-  onToggleSection: () => void;
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
-  onCreateNode?: (parentId: string | null, type: KnowledgeNodeType, label: string) => void;
-  onRenameNode?: (id: string, label: string) => void;
-  onDeleteNode?: (id: string) => void;
-  onMoveNode?: (id: string, newParentId: string | null) => void;
+  creating: { parentId: string | null; type: KnowledgeNodeType } | null;
+  onStartCreate: (parentId: string | null, type: KnowledgeNodeType | null) => void;
+  onCreateNode?: (workspaceId: string, parentId: string | null, type: KnowledgeNodeType, label: string) => void;
+  onRenameNode?: (workspaceId: string, id: string, label: string) => void;
+  onDeleteNode?: (workspaceId: string, id: string) => void;
+  onMoveNode?: (workspaceId: string, id: string, newParentId: string | null) => void;
 }) {
   const [openNodes, setOpenNodes] = useState<Set<string>>(() => new Set());
-  const [creating, setCreating] = useState<{ parentId: string | null; type: KnowledgeNodeType } | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const draggedId = useRef<string | null>(null);
@@ -464,14 +485,9 @@ function KnowledgeSection({
     });
   };
 
-  const startCreate = (parentId: string | null, type: KnowledgeNodeType) => {
-    setCreating({ parentId, type });
-    if (parentId) setOpenNodes(prev => new Set(prev).add(parentId));
-  };
-
   const submitCreate = (parentId: string | null, type: KnowledgeNodeType, label: string) => {
-    if (label.trim()) onCreateNode?.(parentId, type, label.trim());
-    setCreating(null);
+    if (label.trim()) onCreateNode?.(workspaceId, parentId, type, label.trim());
+    onStartCreate(null, null);
   };
 
   const onDragStart = (e: React.DragEvent, id: string) => {
@@ -492,18 +508,17 @@ function KnowledgeSection({
     e.stopPropagation();
     const dragId = draggedId.current;
     setDragOverId(null);
-    if (dragId && dragId !== id) onMoveNode?.(dragId, id);
+    if (dragId && dragId !== id) onMoveNode?.(workspaceId, dragId, id);
     draggedId.current = null;
   };
   const onRootDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const dragId = draggedId.current;
     setDragOverId(null);
-    if (dragId) onMoveNode?.(dragId, null);
+    if (dragId) onMoveNode?.(workspaceId, dragId, null);
     draggedId.current = null;
   };
 
-  // Knowledge is hidden entirely in collapsed (icon-only) mode
   if (!isOpen) return null;
 
   const renderNode = (node: KnowledgeNode, depth: number): React.ReactNode => {
@@ -535,7 +550,7 @@ function KnowledgeSection({
               depth={depth}
               className="flex-1"
               onSubmit={label => {
-                onRenameNode?.(node.id, label);
+                onRenameNode?.(workspaceId, node.id, label);
                 setRenamingId(null);
               }}
               onCancel={() => setRenamingId(null)}
@@ -568,12 +583,12 @@ function KnowledgeSection({
               <span className="flex-1 truncate text-left">{node.label}</span>
             </button>
           )}
-          {isFolder && onCreateNode && <KnowledgeAddControl onPick={type => startCreate(node.id, type)} />}
+          {isFolder && onCreateNode && <KnowledgeAddControl onPick={type => onStartCreate(node.id, type)} />}
           {(onRenameNode || onDeleteNode) && (
             <KnowledgeOptionsControl
               node={node}
               onRename={id => setRenamingId(id)}
-              onDelete={id => onDeleteNode?.(id)}
+              onDelete={id => onDeleteNode?.(workspaceId, id)}
             />
           )}
         </div>
@@ -587,13 +602,82 @@ function KnowledgeSection({
                 placeholder={creating.type === 'folder' ? 'New folder' : 'New file'}
                 depth={depth + 1}
                 onSubmit={label => submitCreate(node.id, creating.type, label)}
-                onCancel={() => setCreating(null)}
+                onCancel={() => onStartCreate(null, null)}
               />
             )}
           </div>
         )}
       </div>
     );
+  };
+
+  return (
+    <div
+      className="flex min-h-[8px] flex-col gap-0.5"
+      onDragOver={e => {
+        if (onMoveNode) e.preventDefault();
+      }}
+      onDrop={onRootDrop}
+    >
+      {nodes.map(node => renderNode(node, 0))}
+      {isOpen && creating?.parentId === null && (
+        <NewItemInput
+          key="__new-root"
+          icon={creating.type === 'folder' ? Folder : File}
+          placeholder={creating.type === 'folder' ? 'New folder' : 'New file'}
+          onSubmit={label => submitCreate(null, creating.type, label)}
+          onCancel={() => onStartCreate(null, null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Workspace section — a list of workspaces, each with its own folder/file tree ─
+
+function WorkspaceSection({
+  workspaces,
+  isOpen,
+  sectionCollapsed,
+  onToggleSection,
+  activeDocId,
+  onSelectDoc,
+  onCreateWorkspace,
+  onRenameWorkspace,
+  onDeleteWorkspace,
+  onCreateNode,
+  onRenameNode,
+  onDeleteNode,
+  onMoveNode,
+}: {
+  workspaces: Workspace[];
+  isOpen: boolean;
+  sectionCollapsed: boolean;
+  onToggleSection: () => void;
+  activeDocId?: string;
+  onSelectDoc?: (docId: string) => void;
+  onCreateWorkspace?: (label: string, icon: string) => void;
+  onRenameWorkspace?: (id: string, label: string, icon: string) => void;
+  onDeleteWorkspace?: (id: string) => void;
+  onCreateNode?: (workspaceId: string, parentId: string | null, type: KnowledgeNodeType, label: string) => void;
+  onRenameNode?: (workspaceId: string, id: string, label: string) => void;
+  onDeleteNode?: (workspaceId: string, id: string) => void;
+  onMoveNode?: (workspaceId: string, id: string, newParentId: string | null) => void;
+}) {
+  const [openWs, setOpenWs] = useState<Set<string>>(() => new Set());
+  const [creating, setCreating] = useState<{ workspaceId: string; parentId: string | null; type: KnowledgeNodeType } | null>(null);
+  const [editing, setEditing] = useState<Workspace | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  if (!isOpen) return null;
+
+  const toggleWs = (id: string) => {
+    setOpenWs(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   return (
@@ -606,7 +690,7 @@ function KnowledgeSection({
             noFocusRing
           )}
         >
-          <span>Knowledge</span>
+          <span>Workspace</span>
           <ChevronRight
             className={cn(
               'h-3 w-3 shrink-0 opacity-0 transition-transform group-hover:opacity-100',
@@ -614,32 +698,198 @@ function KnowledgeSection({
             )}
           />
         </button>
-        {onCreateNode && (
-          <KnowledgeAddControl revealOn="group" onPick={type => startCreate(null, type)} />
-        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => {
+                setEditing(null);
+                setModalOpen(true);
+              }}
+              aria-label="New workspace"
+              className={cn(
+                'group/add mr-1 flex h-5 w-5 items-center justify-center rounded text-foreground/45 transition-all duration-200 ease-out',
+                'hover:bg-foreground/[0.07] hover:text-foreground hover:shadow-sm active:scale-90',
+                noFocusRing
+              )}
+            >
+              <Plus className="h-3 w-3 transition-transform duration-200 ease-out group-hover/add:rotate-90 group-hover/add:scale-110" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">New workspace</TooltipContent>
+        </Tooltip>
       </div>
 
       {(!sectionCollapsed || !isOpen) && (
-        <div
-          className="flex min-h-[8px] flex-col gap-0.5"
-          onDragOver={e => {
-            if (onMoveNode) e.preventDefault();
-          }}
-          onDrop={onRootDrop}
-        >
-          {nodes.map(node => renderNode(node, 0))}
-          {isOpen && creating?.parentId === null && (
-            <NewItemInput
-              key="__new-root"
-              icon={creating.type === 'folder' ? Folder : File}
-              placeholder={creating.type === 'folder' ? 'New folder' : 'New file'}
-              onSubmit={label => submitCreate(null, creating.type, label)}
-              onCancel={() => setCreating(null)}
-            />
-          )}
+        <div className="flex flex-col gap-0.5">
+          {workspaces.map(ws => {
+            const open = openWs.has(ws.id);
+            return (
+              <div key={ws.id} className="flex flex-col">
+                <div className="group flex h-[26px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]">
+                  <button
+                    onClick={() => toggleWs(ws.id)}
+                    style={{ paddingLeft: 8 }}
+                    className={cn(
+                      'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-[13px] transition-colors',
+                      open ? 'text-foreground/80' : 'text-foreground/70 hover:text-foreground/90',
+                      noFocusRing
+                    )}
+                  >
+                    <ChevronRight
+                      className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
+                    />
+                    <span className="text-[13px] leading-none">{ws.icon}</span>
+                    <span className="flex-1 truncate text-left">{ws.label}</span>
+                  </button>
+                  <KnowledgeOptionsControl
+                    node={{ id: ws.id, type: 'folder', label: ws.label }}
+                    reveal="group-hover:opacity-100"
+                    onRename={id => {
+                      const w = workspaces.find(x => x.id === id);
+                      setEditing(w ?? null);
+                      setModalOpen(true);
+                    }}
+                    onDelete={id => onDeleteWorkspace?.(id)}
+                  />
+                  <KnowledgeAddControl
+                    revealOn="group"
+                    onPick={type => {
+                      setOpenWs(prev => new Set(prev).add(ws.id));
+                      setCreating({ workspaceId: ws.id, parentId: null, type });
+                    }}
+                  />
+                </div>
+                {open && (
+                  <WorkspaceNodes
+                    workspaceId={ws.id}
+                    nodes={ws.nodes}
+                    isOpen={isOpen}
+                    activeDocId={activeDocId}
+                    onSelectDoc={onSelectDoc}
+                    creating={creating?.workspaceId === ws.id ? { parentId: creating.parentId, type: creating.type } : null}
+                    onStartCreate={(parentId, type) =>
+                      setCreating(parentId === null || type === null ? null : { workspaceId: ws.id, parentId, type })
+                    }
+                    onCreateNode={onCreateNode}
+                    onRenameNode={onRenameNode}
+                    onDeleteNode={onDeleteNode}
+                    onMoveNode={onMoveNode}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
+
+      <WorkspaceModal
+        open={modalOpen}
+        editing={editing}
+        onClose={() => {
+          setModalOpen(false);
+          setEditing(null);
+        }}
+        onSubmit={(label, icon) => {
+          if (editing) onRenameWorkspace?.(editing.id, label, icon);
+          else onCreateWorkspace?.(label, icon);
+          setModalOpen(false);
+          setEditing(null);
+        }}
+      />
     </div>
+  );
+}
+
+// ─── Workspace create/rename modal — centered, Notion-style icon + name ────────
+
+function WorkspaceModal({
+  open,
+  editing,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  editing?: Workspace | null;
+  onClose: () => void;
+  onSubmit: (label: string, icon: string) => void;
+}) {
+  const [label, setLabel] = useState('');
+  const [icon, setIcon] = useState(WORKSPACE_ICONS[0]);
+
+  useEffect(() => {
+    if (open) {
+      setLabel(editing?.label ?? '');
+      setIcon(editing?.icon ?? WORKSPACE_ICONS[0]);
+    }
+  }, [open, editing]);
+
+  if (!open) return null;
+
+  const submit = () => {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    onSubmit(trimmed, icon);
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40"
+      onMouseDown={onClose}
+    >
+      <div
+        className="w-[360px] rounded-xl border border-border/70 bg-popover p-4 shadow-2xl"
+        onMouseDown={e => e.stopPropagation()}
+      >
+        <h2 className="mb-3 text-sm font-medium text-foreground/90">
+          {editing ? 'Rename workspace' : 'New workspace'}
+        </h2>
+
+        <div className="mb-3">
+          <div className="mb-1.5 text-xs text-foreground/40">Icon</div>
+          <div className="grid grid-cols-10 gap-1">
+            {WORKSPACE_ICONS.map(em => (
+              <button
+                key={em}
+                type="button"
+                onClick={() => setIcon(em)}
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded text-base',
+                  noFocusRing,
+                  icon === em ? 'bg-foreground/[0.08] ring-1 ring-foreground/20' : 'hover:bg-foreground/[0.05]'
+                )}
+              >
+                {em}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <input
+          autoFocus
+          value={label}
+          placeholder="Workspace name"
+          onChange={e => setLabel(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') submit();
+            else if (e.key === 'Escape') onClose();
+          }}
+          className={cn(
+            'mb-4 w-full rounded-md border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-foreground placeholder:text-foreground/35',
+            noFocusRing
+          )}
+        />
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose} className={noFocusRing}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={submit} disabled={!label.trim()} className={noFocusRing}>
+            {editing ? 'Save' : 'Create'}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -958,9 +1208,12 @@ export function Sidebar({
   onAddRepository,
   user,
   onLogout,
-  knowledgeNodes = [],
+  workspaces = [],
   activeDocId,
   onSelectDoc,
+  onCreateWorkspace,
+  onRenameWorkspace,
+  onDeleteWorkspace,
   onCreateNode,
   onRenameNode,
   onDeleteNode,
@@ -973,7 +1226,7 @@ export function Sidebar({
   const [exploreCollapsed, setExploreCollapsed] = useState(false);
   const [syncCollapsed, setSyncCollapsed] = useState(false);
   const [agentsCollapsed, setAgentsCollapsed] = useState(false);
-  const [knowledgeCollapsed, setKnowledgeCollapsed] = useState(false);
+  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false);
 
   return (
     <TooltipProvider>
@@ -1085,14 +1338,17 @@ export function Sidebar({
               onAddAgent={onAddAgent}
             />
 
-            {/* Knowledge */}
-            <KnowledgeSection
-              nodes={knowledgeNodes}
+            {/* Workspace */}
+            <WorkspaceSection
+              workspaces={workspaces}
               isOpen={isOpen}
-              sectionCollapsed={knowledgeCollapsed}
-              onToggleSection={() => setKnowledgeCollapsed(v => !v)}
+              sectionCollapsed={workspaceCollapsed}
+              onToggleSection={() => setWorkspaceCollapsed(v => !v)}
               activeDocId={activeDocId}
               onSelectDoc={onSelectDoc}
+              onCreateWorkspace={onCreateWorkspace}
+              onRenameWorkspace={onRenameWorkspace}
+              onDeleteWorkspace={onDeleteWorkspace}
               onCreateNode={onCreateNode}
               onRenameNode={onRenameNode}
               onDeleteNode={onDeleteNode}

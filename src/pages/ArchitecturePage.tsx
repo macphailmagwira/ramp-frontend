@@ -10,9 +10,11 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Spinner } from '@/components/ui/spinner';
 import {
-  Network, Layers, Component, File, ZoomIn, ZoomOut, Maximize2, X,
+  Network, Component, File, ZoomIn, ZoomOut, Maximize2,
   ChevronRight, ChevronLeft, ArrowRight, AlertCircle,
   MousePointerClick, Info, Expand, Shrink, RefreshCw,
+  Server, Database, Cloud, Wrench, Monitor, Cog, FlaskConical, Webhook,
+  type LucideIcon,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,6 +36,20 @@ interface TypeStyle {
   label: string;
 }
 
+// Per-layer icon, keyed by the backend layer id. Colour is driven purely by the
+// node *type* (Layer/Module/File) so the entire graph and details use one palette.
+interface LayerMeta { icon: LucideIcon; }
+const LAYER_META: Record<string, LayerMeta> = {
+  ui:       { icon: Monitor },
+  api:      { icon: Webhook },
+  services: { icon: Cog },
+  data:     { icon: Database },
+  external: { icon: Cloud },
+  infra:    { icon: Server },
+  shared:   { icon: Wrench },
+  tests:    { icon: FlaskConical },
+};
+
 const TYPE_STYLE: Record<ArchitectureStoryNodeType, TypeStyle> = {
   system:    { dot: '#94a3b8', bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.5)', glow: 'rgba(148,163,184,0.35)', label: 'System' },
   feature:   { dot: '#a855f7', bg: 'rgba(168,85,247,0.12)',  border: 'rgba(168,85,247,0.55)',  glow: 'rgba(168,85,247,0.35)',  label: 'Layer'  },
@@ -41,10 +57,31 @@ const TYPE_STYLE: Record<ArchitectureStoryNodeType, TypeStyle> = {
   file:      { dot: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.55)',  glow: 'rgba(245,158,11,0.35)',  label: 'File'   },
 };
 
-function TypeIcon({ type, className }: { type: ArchitectureStoryNodeType; className?: string }) {
-  const Icon = type === 'system' ? Network
-    : type === 'feature' ? Layers
-    : type === 'component' ? Component
+// Edge-arrow markers: one per node type.
+const MARKER_COLORS: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(TYPE_STYLE).map(([k, v]) => [k, v.dot])),
+};
+
+function isLayer(node: ArchitectureStoryNode): LayerMeta | null {
+  return node.type === 'feature' && LAYER_META[node.id] ? LAYER_META[node.id] : null;
+}
+
+// Every visual element (node accent, edges, contains list, details) is coloured
+// only by the node *type*, so the palette stays consistent and easy to read.
+function styleFor(node: ArchitectureStoryNode): TypeStyle {
+  return TYPE_STYLE[node.type];
+}
+
+// Marker key is the node type, so edges share the type palette too.
+function markerKey(node: ArchitectureStoryNode): string {
+  return node.type;
+}
+
+function TypeIcon({ node, className }: { node: ArchitectureStoryNode; className?: string }) {
+  const layer = isLayer(node);
+  const Icon = layer ? layer.icon
+    : node.type === 'system' ? Network
+    : node.type === 'component' ? Component
     : File;
   return <Icon className={className} />;
 }
@@ -200,7 +237,7 @@ interface NodeCardProps {
 function NodeCard({
   node, connected, hovered, selected, focused, dimmed, fileCount, onEnter, onLeave, onClick,
 }: NodeCardProps) {
-  const p = TYPE_STYLE[node.type];
+  const p = styleFor(node);
   const drillable = node.children.length > 0;
   const emphasized = hovered || selected || focused || connected;
 
@@ -239,7 +276,7 @@ function NodeCard({
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
           style={{ background: `${p.dot}1f`, border: `1px solid ${p.dot}55`, color: p.dot }}
         >
-          <TypeIcon type={node.type} className="h-3 w-3" />
+          <TypeIcon node={node} className="h-3 w-3" />
         </span>
         <span className="truncate text-[12.5px] font-semibold tracking-[-0.01em] text-foreground">
           {node.label}
@@ -269,7 +306,7 @@ function NodeCard({
       <div className="mt-1.5 flex items-center gap-1.5 pl-1.5">
         <span
           className="rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.08em]"
-          style={{ background: `${p.dot}1a`, color: p.dot }}
+          style={{ background: `${TYPE_STYLE[node.type].dot}1a`, color: TYPE_STYLE[node.type].dot }}
         >
           {p.label}
         </span>
@@ -703,9 +740,9 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                 {/* Edges */}
                 <svg className="pointer-events-none absolute inset-0 z-[1] overflow-visible" style={{ width: 5000, height: 4000 }}>
                   <defs>
-                    {Object.entries(TYPE_STYLE).map(([k, v]) => (
+                    {Object.entries(MARKER_COLORS).map(([k, dot]) => (
                       <marker key={k} id={`arch-arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
-                        <path d="M0 0 L10 5 L0 10 z" fill={v.dot} />
+                        <path d="M0 0 L10 5 L0 10 z" fill={dot} />
                       </marker>
                     ))}
                     <marker id="arch-arrow-idle" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
@@ -719,7 +756,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                     const tc = { x: tgt.x + tgt.width / 2, y: tgt.y + tgt.height / 2 };
                     const sa = getEdgeAnchor(src, tc.x, tc.y, 0);
                     const ta = getEdgeAnchor(tgt, sc.x, sc.y, -5);
-                    const p = TYPE_STYLE[src.type];
+                    const p = styleFor(src);
                     const hi = hasFocus && (s === focusId || t === focusId);
                     const dim = isEdgeDimmed(s, t);
                     const d = getCurvedPath(sa.x, sa.y, ta.x, ta.y);
@@ -732,7 +769,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                           stroke={hi ? p.dot : 'hsl(var(--muted-foreground) / 0.45)'}
                           strokeWidth={hi ? 2 : 1.4}
                           strokeDasharray={hi ? '6 4' : undefined}
-                          markerEnd={`url(#arch-arrow-${hi ? src.type : 'idle'})`}
+                          markerEnd={`url(#arch-arrow-${hi ? markerKey(src) : 'idle'})`}
                         >
                           {hi && (
                             <animate attributeName="stroke-dashoffset" from="20" to="0" dur="0.7s" repeatCount="indefinite" />
@@ -839,38 +876,43 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
               <ScrollArea className="min-h-0 flex-1">
                 <div className="space-y-4 overflow-hidden p-4">
                   {/* Identity card */}
+                  {(() => {
+                    const st = styleFor(selectedData);
+                    return (
                   <div
                     className="flex items-center gap-2.5 overflow-hidden rounded-lg border p-3"
-                    style={{ borderColor: `${TYPE_STYLE[selectedData.type].border}55`, background: TYPE_STYLE[selectedData.type].bg }}
+                    style={{ borderColor: `${st.border}55`, background: st.bg }}
                   >
                     <span
                       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
                       style={{
-                        background: `${TYPE_STYLE[selectedData.type].dot}22`,
-                        border: `1px solid ${TYPE_STYLE[selectedData.type].dot}55`,
-                        color: TYPE_STYLE[selectedData.type].dot,
+                        background: `${st.dot}22`,
+                        border: `1px solid ${st.dot}55`,
+                        color: st.dot,
                       }}
                     >
-                      <TypeIcon type={selectedData.type} className="h-3.5 w-3.5" />
+                      <TypeIcon node={selectedData} className="h-3.5 w-3.5" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-bold text-foreground" title={selectedData.label}>
                         {selectedData.label}
                       </div>
                       <div className="truncate text-[10.5px] uppercase tracking-[0.08em] text-foreground/70">
-                        {TYPE_STYLE[selectedData.type].label}
+                        {st.label}
                         {selectedData.type !== 'file' && ` · ${fileCounts[selectedData.id] ?? 0} files`}
                       </div>
                     </div>
                   </div>
+                    );
+                  })()}
 
                   {selectedData.insight && (
                     <div
                       className="rounded-lg border px-3 py-2 text-[11.5px] font-medium leading-snug"
                       style={{
-                        background: `${TYPE_STYLE[selectedData.type].dot}14`,
-                        borderColor: `${TYPE_STYLE[selectedData.type].dot}44`,
-                        color: TYPE_STYLE[selectedData.type].dot,
+                        background: `${styleFor(selectedData).dot}14`,
+                        borderColor: `${styleFor(selectedData).dot}44`,
+                        color: styleFor(selectedData).dot,
                       }}
                     >
                       {selectedData.insight}
@@ -913,7 +955,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                       </div>
                       <div className="flex flex-col gap-1">
                         {selectedData.children.map(child => {
-                          const cp = TYPE_STYLE[child.type];
+                          const cp = styleFor(child);
                           return (
                             <button
                               key={child.id}
@@ -924,7 +966,7 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
                                 className="flex h-5 w-5 shrink-0 items-center justify-center rounded"
                                 style={{ background: `${cp.dot}22`, color: cp.dot }}
                               >
-                                <TypeIcon type={child.type} className="h-2.5 w-2.5" />
+                                <TypeIcon node={child} className="h-2.5 w-2.5" />
                               </span>
                               <span className="min-w-0 flex-1 truncate text-[11.5px] text-foreground" title={child.label}>
                                 {child.label}
@@ -986,9 +1028,9 @@ function DepList({
           >
             <span
               className="flex h-4 w-4 shrink-0 items-center justify-center"
-              style={{ color: TYPE_STYLE[n.type].dot }}
+              style={{ color: styleFor(n).dot }}
             >
-              <TypeIcon type={n.type} className="h-3 w-3" />
+              <TypeIcon node={n} className="h-3 w-3" />
             </span>
             <span className="min-w-0 flex-1 truncate text-[11.5px] text-foreground" title={n.label}>
               {n.label}
