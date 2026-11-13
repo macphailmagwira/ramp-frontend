@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { gradientFor, initialsOf } from '@/lib/avatar';
-import type { ViewState, Repository, User } from '@/types';
+import type { ViewState, Repository, User, DocBlock } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import {
@@ -92,6 +92,8 @@ export interface KnowledgeNode {
   type: KnowledgeNodeType;
   label: string;
   children?: KnowledgeNode[];
+  /** Document body, present only on `file` nodes that have been opened/edited. */
+  content?: DocBlock[];
 }
 
 export interface Workspace {

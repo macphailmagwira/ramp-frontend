@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 
 const STATIC_GREYS = [
@@ -10,7 +10,7 @@ const STATIC_GREYS = [
 ];
 
 
-import type { ViewState, Repository, User, ApiRepository, ApiConnectedRepository } from '@/types';
+import type { ViewState, Repository, User, ApiRepository, ApiConnectedRepository, DocBlock } from '@/types';
 import { mockTeamMembers } from '@/data/mock';
 import { api, getToken, setToken } from '@/lib/api';
 import { Video, MessageSquare } from 'lucide-react';
@@ -32,6 +32,7 @@ import { RepositoryAnalysisPage } from '@/pages/RepositoryAnalysisPage';
 import { InboxPage } from '@/pages/InboxPage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { StorybookPage } from '@/pages/StorybookPage';
+import { DocsPage } from '@/pages/DocsPage';
 import { AskRampPage } from '@/pages/AskRampPage';
 import { TeamPage } from '@/pages/TeamPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -97,6 +98,59 @@ const toUser = (apiUser: any): User => {
 const connectedRepoKey = (userId?: string | null) =>
   userId ? `ramp_connected_repo_id_${userId}` : 'ramp_connected_repo_id';
 
+const WORKSPACES_STORAGE_KEY = 'ramp_workspaces';
+
+const SEED_WORKSPACES: Workspace[] = [
+  {
+    id: 'ws-engineering',
+    label: 'Engineering',
+    icon: '📘',
+    nodes: [
+      {
+        id: 'getting-started',
+        type: 'folder',
+        label: 'Getting started',
+        children: [
+          { id: 'setup-guide', type: 'file', label: 'Setup guide' },
+          { id: 'onboarding', type: 'file', label: 'Onboarding' },
+        ],
+      },
+      {
+        id: 'architecture',
+        type: 'folder',
+        label: 'Architecture',
+        children: [
+          { id: 'system-overview', type: 'file', label: 'System overview' },
+          { id: 'data-flow', type: 'file', label: 'Data flow' },
+          { id: 'api-contracts', type: 'file', label: 'API contracts' },
+        ],
+      },
+      {
+        id: 'runbooks',
+        type: 'folder',
+        label: 'Runbooks',
+        children: [
+          { id: 'deploy', type: 'file', label: 'Deploy' },
+          { id: 'rollback', type: 'file', label: 'Rollback' },
+        ],
+      },
+    ],
+  },
+];
+
+const loadWorkspaces = (): Workspace[] => {
+  try {
+    const raw = localStorage.getItem(WORKSPACES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as Workspace[];
+    }
+  } catch {
+    /* ignore malformed storage */
+  }
+  return SEED_WORKSPACES;
+};
+
 function AppContent() {
   const [view, setView] = useState<ViewState>('login');
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null);
@@ -114,44 +168,18 @@ function AppContent() {
     const t = setTimeout(() => setIsSidebarOpen(true), 500);
     return () => clearTimeout(t);
   }, [isAuthenticating]);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(() => [
-    {
-      id: 'ws-engineering',
-      label: 'Engineering',
-      icon: '📘',
-      nodes: [
-        {
-          id: 'getting-started',
-          type: 'folder',
-          label: 'Getting started',
-          children: [
-            { id: 'setup-guide', type: 'file', label: 'Setup guide' },
-            { id: 'onboarding', type: 'file', label: 'Onboarding' },
-          ],
-        },
-        {
-          id: 'architecture',
-          type: 'folder',
-          label: 'Architecture',
-          children: [
-            { id: 'system-overview', type: 'file', label: 'System overview' },
-            { id: 'data-flow', type: 'file', label: 'Data flow' },
-            { id: 'api-contracts', type: 'file', label: 'API contracts' },
-          ],
-        },
-        {
-          id: 'runbooks',
-          type: 'folder',
-          label: 'Runbooks',
-          children: [
-            { id: 'deploy', type: 'file', label: 'Deploy' },
-            { id: 'rollback', type: 'file', label: 'Rollback' },
-          ],
-        },
-      ],
-    },
-  ]);
+
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(loadWorkspaces);
+  // Persist workspace docs (including edited document bodies) across reloads.
+  useEffect(() => {
+    try {
+      localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(workspaces));
+    } catch {
+      /* storage may be unavailable; editing still works in-memory */
+    }
+  }, [workspaces]);
   const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
+  const prevViewRef = useRef<ViewState>('overview');
   const [enabledAgentIds, setEnabledAgentIds] = useState<Set<string>>(() => new Set(['pr', 'commit']));
   const agents: AgentItem[] = AVAILABLE_AGENTS.filter(a => enabledAgentIds.has(a.id)).map(a => ({
     id: a.id,
@@ -459,6 +487,77 @@ function AppContent() {
     setWorkspaces(prev => prev.filter(w => w.id !== id));
   };
 
+  // ── Document editing ─────────────────────────────────────────────────────────
+
+  interface LocatedDoc {
+    workspaceId: string;
+    workspaceIcon: string;
+    workspaceLabel: string;
+    node: KnowledgeNode;
+    path: { id: string; label: string }[];
+  }
+
+  const findDoc = (docId: string): LocatedDoc | null => {
+    for (const ws of workspaces) {
+      const path: { id: string; label: string }[] = [];
+      const walk = (nodes: KnowledgeNode[]): KnowledgeNode | null => {
+        for (const n of nodes) {
+          path.push({ id: n.id, label: n.label });
+          if (n.id === docId && n.type === 'file') {
+            const node = { ...n };
+            return node;
+          }
+          if (n.children) {
+            const found = walk(n.children);
+            if (found) return found;
+          }
+          path.pop();
+        }
+        return null;
+      };
+      const node = walk(ws.nodes);
+      if (node) {
+        return {
+          workspaceId: ws.id,
+          workspaceIcon: ws.icon,
+          workspaceLabel: ws.label,
+          node,
+          path: path.map(p => ({ ...p })),
+        };
+      }
+    }
+    return null;
+  };
+
+  const updateDocContent = (workspaceId: string, docId: string, content: DocBlock[]) => {
+    setWorkspaces(prev =>
+      prev.map(w =>
+        w.id === workspaceId
+          ? { ...w, nodes: setNodeContent(w.nodes, docId, content) }
+          : w,
+      ),
+    );
+  };
+
+  const setNodeContent = (
+    nodes: KnowledgeNode[],
+    docId: string,
+    content: DocBlock[],
+  ): KnowledgeNode[] =>
+    nodes.map(n => {
+      if (n.id === docId) return { ...n, content };
+      if (n.children) return { ...n, children: setNodeContent(n.children, docId, content) };
+      return n;
+    });
+
+  const handleSelectDoc = (docId: string) => {
+    setActiveDocId(docId);
+    setView(v => {
+      if (v !== 'docs') prevViewRef.current = v;
+      return 'docs';
+    });
+  };
+
   if (isAuthenticating) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-6 bg-background">
@@ -627,6 +726,27 @@ function AppContent() {
             }}
           />
         );
+      case 'docs': {
+        const doc = activeDocId ? findDoc(activeDocId) : null;
+        if (!doc) return <InboxPage />;
+        const blocks = doc.node.content && doc.node.content.length > 0
+          ? doc.node.content
+          : [{ id: crypto.randomUUID(), type: 'paragraph' as const, text: '' }];
+        return (
+          <DocsPage
+            key={doc.node.id}
+            workspaceIcon={doc.workspaceIcon}
+            workspaceLabel={doc.workspaceLabel}
+            path={doc.path}
+            docId={doc.node.id}
+            title={doc.node.label}
+            blocks={blocks}
+            onBack={() => setView(prevViewRef.current)}
+            onRename={label => handleRenameNode(doc.workspaceId, doc.node.id, label)}
+            onUpdateContent={content => updateDocContent(doc.workspaceId, doc.node.id, content)}
+          />
+        );
+      }
       default:
         return <InboxPage/>;
     }
@@ -647,7 +767,7 @@ function AppContent() {
         onLogout={handleLogout}
         workspaces={workspaces}
         activeDocId={activeDocId}
-        onSelectDoc={setActiveDocId}
+        onSelectDoc={handleSelectDoc}
         onCreateWorkspace={handleCreateWorkspace}
         onRenameWorkspace={handleRenameWorkspace}
         onDeleteWorkspace={handleDeleteWorkspace}

@@ -154,7 +154,30 @@ export type ViewState =
   | 'team'
   | 'settings'
   | 'agents'
-  | 'agents-new';
+  | 'agents-new'
+  | 'docs';
+
+// ─── Document blocks (Notion-style editor) ────────────────────────────────────
+
+export type DocBlockType =
+  | 'paragraph'
+  | 'heading1'
+  | 'heading2'
+  | 'heading3'
+  | 'bulleted'
+  | 'numbered'
+  | 'todo'
+  | 'quote'
+  | 'code'
+  | 'divider';
+
+export interface DocBlock {
+  id: string;
+  type: DocBlockType;
+  text: string;
+  /** Only used by `todo` blocks. */
+  checked?: boolean;
+}
 
 export interface ApiRepository {
   id: number;
