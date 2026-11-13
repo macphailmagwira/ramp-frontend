@@ -50,6 +50,14 @@ const LAYER_META: Record<string, LayerMeta> = {
   tests:    { icon: FlaskConical },
 };
 
+// Column for each layer on the top-level map (left → right). Layers import each other in
+// cycles (API ↔ Business Logic ↔ Data), so a dependency-based layout orders them arbitrarily
+// (it came out reversed). Fixed ranks keep the map in architectural order. Only used at the
+// top level and only when every node there is a known layer.
+const LAYER_RANK: Record<string, number> = {
+  ui: 0, tests: 0, api: 1, services: 2, data: 3, external: 3, infra: 3, shared: 4,
+};
+
 const TYPE_STYLE: Record<ArchitectureStoryNodeType, TypeStyle> = {
   system:    { dot: '#94a3b8', bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.5)', glow: 'rgba(148,163,184,0.35)', label: 'System' },
   feature:   { dot: '#a855f7', bg: 'rgba(168,85,247,0.12)',  border: 'rgba(168,85,247,0.55)',  glow: 'rgba(168,85,247,0.35)',  label: 'Layer'  },
@@ -88,7 +96,7 @@ function TypeIcon({ node, className }: { node: ArchitectureStoryNode; className?
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
-const NODE_W = 216, NODE_H = 100, COL_W = 280, ROW_H = 124, MAX_PER_COL = 6;
+const NODE_W = 232, NODE_H = 104, COL_W = 360, ROW_H = 150, MAX_PER_COL = 5;
 
 function getEdgeAnchor(node: NodeWithPos, fromX: number, fromY: number, margin = 0) {
   const cx = node.x + node.width / 2, cy = node.y + node.height / 2;
@@ -104,7 +112,11 @@ function getCurvedPath(sx: number, sy: number, tx: number, ty: number) {
   return `M ${sx} ${sy} C ${sx + dx * 0.45} ${sy} ${tx - dx * 0.45} ${ty} ${tx} ${ty}`;
 }
 
-function layoutTree(nodes: ArchitectureStoryNode[], edges: [string, string][]): NodeWithPos[] {
+function layoutTree(
+  nodes: ArchitectureStoryNode[],
+  edges: [string, string][],
+  rank?: Record<string, number>,
+): NodeWithPos[] {
   if (nodes.length === 0) return [];
   const ids = new Set(nodes.map(n => n.id));
 
@@ -149,6 +161,11 @@ function layoutTree(nodes: ArchitectureStoryNode[], edges: [string, string][]): 
       level[t] = Math.max(level[t], level[id] + 1);
       if (--indeg[t] === 0) queue.push(t);
     }
+  }
+
+  // Fixed architectural order (top-level layers): overrides the dependency-based columns.
+  if (rank && nodes.every(n => rank[n.id] !== undefined)) {
+    nodes.forEach(n => { level[n.id] = rank[n.id]; });
   }
 
   const maxLevel = Math.max(...Object.values(level));
@@ -415,7 +432,11 @@ export function ArchitecturePage({ repoId }: ArchitecturePageProps) {
   const { viewNodes, viewEdges, layouted } = useMemo(() => {
     const vn = current ? current.children : [];
     const ve = (current ? current.edges : []) as [string, string][];
-    return { viewNodes: vn, viewEdges: ve, layouted: layoutTree(vn, ve) };
+    return {
+      viewNodes: vn,
+      viewEdges: ve,
+      layouted: layoutTree(vn, ve, current?.type === 'system' ? LAYER_RANK : undefined),
+    };
   }, [current]);
 
   const nodeById = useMemo(() => {

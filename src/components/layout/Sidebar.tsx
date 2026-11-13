@@ -11,6 +11,14 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -55,9 +63,12 @@ import {
   Search,
   SquarePen,
   Star,
+  GitFork,
+  Info,
   LogOut,
   User as UserIcon,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 // ─── Shared focus-reset — every interactive control in this file uses this
 // instead of relying on browser/Radix defaults, which can still show a ring
@@ -977,6 +988,24 @@ function AgentsSection({
 
 // ─── Repo switcher ────────────────────────────────────────────────────────────
 
+function formatRepoDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function RepoStat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+}
+
 function RepoSwitcher({
   repository,
   repositories = [],
@@ -991,6 +1020,12 @@ function RepoSwitcher({
   onAdd?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [detailsRepo, setDetailsRepo] = useState<Repository | null>(null);
+
+  const openDetails = (repo: Repository) => {
+    setOpen(false);
+    setDetailsRepo(repo);
+  };
 
   const trigger = (
     <button
@@ -1017,7 +1052,8 @@ function RepoSwitcher({
   );
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
       {!sidebarOpen ? (
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
@@ -1050,7 +1086,7 @@ function RepoSwitcher({
                       onSelect?.(repo);
                       setOpen(false);
                     }}
-                    className={cn('gap-2', noFocusRing)}
+                    className={cn('gap-2 pr-1', noFocusRing)}
                   >
                     <span className="flex-1 truncate text-sm">{repo.name}</span>
                     <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -1062,6 +1098,23 @@ function RepoSwitcher({
                         </span>
                       )}
                     </span>
+                    <button
+                      type="button"
+                      aria-label={`Details for ${repo.name}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openDetails(repo);
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className={cn(
+                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground',
+                        'hover:bg-foreground/10 hover:text-foreground',
+                        noFocusRing,
+                      )}
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
                     <Check className={cn('h-3.5 w-3.5', sel ? 'opacity-100' : 'opacity-0')} />
                   </CommandItem>
                 );
@@ -1085,6 +1138,66 @@ function RepoSwitcher({
         </Command>
       </PopoverContent>
     </Popover>
+
+    <Dialog open={!!detailsRepo} onOpenChange={(o) => { if (!o) setDetailsRepo(null); }}>
+      <DialogContent className="overflow-hidden p-0 sm:max-w-md">
+        {detailsRepo && (
+          <>
+            <div className="flex items-start gap-3 border-b p-5">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <GitBranch className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="truncate">{detailsRepo.name}</DialogTitle>
+                <DialogDescription className="truncate">{detailsRepo.fullName}</DialogDescription>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {detailsRepo.language !== 'Unknown' && (
+                    <Badge variant="secondary">{detailsRepo.language}</Badge>
+                  )}
+                  <Badge variant={detailsRepo.isConnected ? 'default' : 'outline'}>
+                    {detailsRepo.isConnected ? 'Connected' : 'Not connected'}
+                  </Badge>
+                  {detailsRepo.isAnalyzing && <Badge variant="secondary">Analyzing…</Badge>}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-5">
+              {detailsRepo.description && (
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {detailsRepo.description}
+                </p>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <RepoStat icon={Star} label="Stars" value={detailsRepo.stars.toLocaleString()} />
+                <RepoStat icon={GitFork} label="Forks" value={detailsRepo.forks.toLocaleString()} />
+              </div>
+
+              <Separator />
+
+              <dl className="space-y-2.5 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground">Last updated</dt>
+                  <dd className="font-medium">{formatRepoDate(detailsRepo.updatedAt)}</dd>
+                </div>
+                {detailsRepo.isAnalyzing && (
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-muted-foreground">Analysis progress</dt>
+                    <dd className="font-medium">{detailsRepo.analysisProgress}%</dd>
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground">Repository ID</dt>
+                  <dd className="truncate font-mono text-xs text-muted-foreground">{detailsRepo.id}</dd>
+                </div>
+              </dl>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
