@@ -109,6 +109,7 @@ export interface AgentItem {
   id: string;
   label: string;
   description?: string;
+  icon?: React.ComponentType<{ className?: string }>;
 }
 
 interface SidebarProps {
@@ -966,9 +967,9 @@ function AgentsSection({
 
       {(!sectionCollapsed || !isOpen) && (
         <>
-          {/* Example agents — outer list */}
+          {/* Active agents — outer list */}
           {agents.map(agent => {
-            const Icon = agent.id === 'pr' ? GitPullRequest : GitCommit;
+            const Icon = agent.icon ?? (agent.id === 'pr' ? GitPullRequest : GitCommit);
             return (
               <Row
                 key={agent.id}
@@ -980,6 +981,18 @@ function AgentsSection({
               />
             );
           })}
+
+          {agents.length === 0 && (
+            <div className="px-2 py-1.5">
+              <p className="text-xs text-foreground/45">No agents enabled yet.</p>
+              <button
+                onClick={onAddAgent}
+                className="mt-1 text-xs font-medium text-foreground/70 transition-colors hover:text-foreground"
+              >
+                Browse available agents →
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

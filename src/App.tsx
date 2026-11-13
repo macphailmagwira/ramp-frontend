@@ -35,7 +35,8 @@ import { AskRampPage } from '@/pages/AskRampPage';
 import { TeamPage } from '@/pages/TeamPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { AgentsPage } from '@/pages/AgentsPage';
-import { AgentsNewPage } from '@/pages/AgentsNewPage';
+import { AgentsCatalogPage } from '@/pages/AgentsCatalogPage';
+import { AVAILABLE_AGENTS } from '@/data/agents';
 
 import './App.css';
 
@@ -149,11 +150,22 @@ function AppContent() {
     },
   ]);
   const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
-  const [exampleAgents] = useState<AgentItem[]>(() => [
-    { id: 'pr', label: 'PR Agent', description: 'Automatically reviews and summarizes pull requests.' },
-    { id: 'commit', label: 'Commit Agent', description: 'Generates clear, conventional commit messages.' },
-  ]);
-  const [activeAgentId, setActiveAgentId] = useState<string | undefined>(undefined);
+  const [enabledAgentIds, setEnabledAgentIds] = useState<Set<string>>(() => new Set(['pr', 'commit']));
+  const agents: AgentItem[] = AVAILABLE_AGENTS.filter(a => enabledAgentIds.has(a.id)).map(a => ({
+    id: a.id,
+    label: a.label,
+    description: a.tagline,
+    icon: a.icon,
+  }));
+  const [activeAgentId, setActiveAgentId] = useState<string | undefined>('pr');
+
+  const toggleAgent = (id: string) =>
+    setEnabledAgentIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const loadConnectedRepositories = useCallback(async () => {
     try {
@@ -329,6 +341,8 @@ function AppContent() {
   };
 
   const handleNavigate = (newView: ViewState) => setView(newView);
+
+  const handleAddAgent = () => setView('agents-new');
 
   const insertKnowledgeNode = (
     nodes: KnowledgeNode[],
@@ -571,9 +585,20 @@ function AppContent() {
       case 'settings':
         return <SettingsPage user={user} onLogout={handleLogout} />;
       case 'agents':
-        return <AgentsPage agents={exampleAgents} activeAgentId={activeAgentId} />;
+        return <AgentsPage agents={agents} activeAgentId={activeAgentId} onBrowse={handleAddAgent} />;
       case 'agents-new':
-        return <AgentsNewPage onBack={() => setView('agents')} />;
+        return (
+          <AgentsCatalogPage
+            catalog={AVAILABLE_AGENTS}
+            enabledIds={enabledAgentIds}
+            onToggle={toggleAgent}
+            onBack={() => setView('agents')}
+            onViewAgent={id => {
+              setActiveAgentId(id);
+              setView('agents');
+            }}
+          />
+        );
       default:
         return <InboxPage/>;
     }
@@ -602,13 +627,13 @@ function AppContent() {
         onRenameNode={handleRenameNode}
         onDeleteNode={handleDeleteNode}
         onMoveNode={handleMoveNode}
-        agents={exampleAgents}
+        agents={agents}
         activeAgentId={activeAgentId}
         onSelectAgent={id => {
           setActiveAgentId(id);
           setView('agents');
         }}
-        onAddAgent={() => setView('agents-new')}
+        onAddAgent={handleAddAgent}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar
