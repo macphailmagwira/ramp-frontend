@@ -13,6 +13,7 @@ const STATIC_GREYS = [
 import type { ViewState, Repository, User, ApiRepository, ApiConnectedRepository } from '@/types';
 import { mockTeamMembers } from '@/data/mock';
 import { api, getToken, setToken } from '@/lib/api';
+import { Video, MessageSquare } from 'lucide-react';
 
 // Layout Components
 import { Sidebar, type KnowledgeNode, type Workspace, type AgentItem } from '@/components/layout/Sidebar';
@@ -36,6 +37,7 @@ import { TeamPage } from '@/pages/TeamPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { AgentsPage } from '@/pages/AgentsPage';
 import { AgentsCatalogPage } from '@/pages/AgentsCatalogPage';
+import { ComingSoonPage } from '@/pages/ComingSoonPage';
 import { AVAILABLE_AGENTS } from '@/data/agents';
 
 import './App.css';
@@ -578,8 +580,34 @@ function AppContent() {
         return <ArchitecturePage repoId={connectedRepoId} />;
       case 'storybook':
         return <StorybookPage repoId={connectedRepoId} />;
-     case 'ask-ramp':
+      case 'ask-ramp':
         return <AskRampPage />;
+      case 'meetings':
+        return (
+          <ComingSoonPage
+            title="Meetings"
+            description="Automatically join, record, and summarize your meetings so the important decisions never get lost."
+            icon={Video}
+            bullets={[
+              'Auto-generated summaries with decisions and action items',
+              'Calendar sync with one-click join',
+              'Searchable transcripts across all your calls',
+            ]}
+          />
+        );
+      case 'chat':
+        return (
+          <ComingSoonPage
+            title="Chat"
+            description="A shared space where your team and Ramp's agents collaborate, ask questions, and act on context in real time."
+            icon={MessageSquare}
+            bullets={[
+              'Threaded conversations with agents and teammates',
+              'Inline actions powered by your connected repos',
+              'Full history synced to your inbox',
+            ]}
+          />
+        );
       case 'team':
         return <TeamPage members={mockTeamMembers} />;
       case 'settings':

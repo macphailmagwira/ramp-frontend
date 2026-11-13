@@ -13,7 +13,6 @@ import {
 import {
   Inbox as InboxIcon,
   AtSign,
-  GitPullRequest,
   FileText,
   Video,
   CheckCheck,
@@ -26,7 +25,6 @@ import {
   MoreHorizontal,
   Check,
   ExternalLink,
-  Flag,
   Bot,
   Circle,
   Tag,
@@ -36,7 +34,7 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type InboxCategory = 'mention' | 'review' | 'doc' | 'meeting';
+type InboxCategory = 'mention' | 'agent' | 'doc' | 'meeting';
 
 interface ActivityLine {
   icon: React.ElementType;
@@ -70,7 +68,7 @@ const CATEGORY_META: Record<
   { label: string; icon: React.ElementType; className: string }
 > = {
   mention: { label: 'Mentions', icon: AtSign, className: 'text-sky-400' },
-  review: { label: 'Reviews', icon: GitPullRequest, className: 'text-emerald-400' },
+  agent: { label: 'Agents', icon: Bot, className: 'text-primary' },
   doc: { label: 'Docs', icon: FileText, className: 'text-violet-400' },
   meeting: { label: 'Meetings and Chats', icon: Video, className: 'text-amber-400' },
 };
@@ -115,7 +113,7 @@ function isoAgo(hours: number): string {
 const MOCK_ITEMS: InboxItem[] = [
   {
     id: 'i1',
-    category: 'review',
+    category: 'agent',
     title: '[Planning] Wire up production start/end date to plan summary table',
     context: ['Product-Eng', 'WIP Tickets', 'PR #482'],
     actor: 'Claude',
@@ -199,10 +197,11 @@ const MOCK_ITEMS: InboxItem[] = [
   },
   {
     id: 'i5',
-    category: 'review',
+    category: 'agent',
     title: '[Uploads] Order-style duplicate check only compares within batch',
     context: ['Product-Eng', 'Uploads', 'PR #479'],
-    actor: 'Victor Aderibgibe',
+    actor: 'Claude',
+    actorIsAi: true,
     action: 'requested changes',
     timestamp: isoAgo(9),
     unread: false,
@@ -267,7 +266,7 @@ const MOCK_ITEMS: InboxItem[] = [
   },
   {
     id: 'i9',
-    category: 'review',
+    category: 'agent',
     title: '[Orders] Rename quantity column and add quote totals',
     context: ['Product-Eng', 'Orders', 'PR #471'],
     actor: 'Claude',
@@ -365,19 +364,6 @@ function InboxRow({
         <NotificationSentence item={item} />
       </span>
 
-      {item.priority && (
-        <span className="hidden shrink-0 items-center gap-1 text-rose-400 sm:flex">
-          <Flag className="h-3 w-3 fill-rose-400" />
-          <span className="w-3 text-xs tabular-nums">{item.priority}</span>
-        </span>
-      )}
-
-      {item.replies && (
-        <span className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-xs tabular-nums text-muted-foreground transition-colors duration-150 group-hover:border-border/80 group-hover:bg-white/[0.04] sm:flex">
-          {item.replies}
-        </span>
-      )}
-
       <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">
         {rowTimestamp(item, bucket)}
       </span>
@@ -438,19 +424,6 @@ function ExpandedPanel({
       </div>
 
       <p className="px-5 pb-4 pt-3 text-sm leading-relaxed text-muted-foreground dark:text-white/80">{item.preview}</p>
-
-      <Separator />
-
-      {/* Activity feed */}
-      <ul className="divide-y divide-border/60">
-        {item.activity.map((line, i) => (
-          <li key={i} className="flex items-center gap-3 px-5 py-2.5">
-            <line.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.9} />
-            <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{line.text}</span>
-            <span className="shrink-0 text-xs text-muted-foreground/70">{relativeOrClock(line.time)}</span>
-          </li>
-        ))}
-      </ul>
 
       <div className="flex items-center justify-end gap-2 px-5 py-3">
         <Button size="sm" className="h-7 gap-1.5 text-xs font-semibold" onClick={onOpen}>
@@ -521,7 +494,7 @@ type TabValue = 'all' | InboxCategory | 'cleared';
 const TABS: { value: TabValue; label: string; icon: React.ElementType }[] = [
   { value: 'all', label: 'All', icon: InboxIcon },
   { value: 'mention', label: 'Mentions', icon: AtSign },
-  { value: 'review', label: 'Reviews', icon: GitPullRequest },
+  { value: 'agent', label: 'Agents', icon: Bot },
   { value: 'doc', label: 'Docs', icon: FileText },
   { value: 'meeting', label: 'Meetings and Chats', icon: Video },
   { value: 'cleared', label: 'Cleared', icon: CheckCheck },
@@ -535,7 +508,7 @@ export function InboxPage() {
   const [hiddenCategories, setHiddenCategories] = useState<Set<InboxCategory>>(new Set());
 
   const unreadCounts = useMemo(() => {
-    const counts: Record<TabValue, number> = { all: 0, mention: 0, review: 0, doc: 0, meeting: 0, cleared: 0 };
+    const counts: Record<TabValue, number> = { all: 0, mention: 0, agent: 0, doc: 0, meeting: 0, cleared: 0 };
     for (const item of items) {
       if (item.cleared || !item.unread) continue;
       counts.all += 1;
@@ -685,7 +658,7 @@ export function InboxPage() {
             label={
               activeTab === 'cleared'
                 ? 'Cleared items will show up here.'
-                : 'New mentions, review requests, doc updates, and meeting summaries will show up here.'
+                : 'New mentions, agent messages, doc updates, and meeting summaries will show up here.'
             }
           />
         ) : (
