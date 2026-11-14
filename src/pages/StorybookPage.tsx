@@ -218,17 +218,25 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
           )}
 
           {!busy && phase === 'empty' && (
-            <CenteredCard
-              icon={<BookOpen className="size-6 text-ramp-blue" />}
-              title="No storybook yet"
-              message="Generate a guided setup walkthrough for this repository."
-              action={
-                <Button onClick={generate}>
-                  <SparklesIcon />
-                  Generate storybook
-                </Button>
-              }
-            />
+            <div className="flex h-full w-full flex-col items-center justify-center gap-5 p-8 text-center">
+              <div className="relative flex size-20 items-center justify-center">
+                <div className="absolute inset-0 rounded-full bg-ramp-blue/15 blur-xl" />
+                <div className="relative flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-ramp-blue/20 to-ramp-blue/5 text-ramp-blue ring-1 ring-inset ring-ramp-blue/20">
+                  <BookOpen className="size-8" strokeWidth={1.5} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                  No storybook yet
+                </h1>
+                <p className="mx-auto max-w-xs text-sm leading-relaxed text-muted-foreground">
+                  Generate a guided setup walkthrough for this repository.
+                </p>
+              </div>
+              <Button onClick={generate} size="lg" className="mt-1 gap-2">
+                Generate storybook
+              </Button>
+            </div>
           )}
 
           {!busy && phase === 'error' && (
@@ -284,24 +292,6 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
           )}
         </main>
       </SidebarProvider>
-  );
-}
-
-function SparklesIcon() {
-  return (
-    <svg
-      className="size-4"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" />
-      <path d="M20 3v4M22 5h-4M4 17v2M5 18H3" />
-    </svg>
   );
 }
 

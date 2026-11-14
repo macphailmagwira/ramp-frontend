@@ -180,7 +180,7 @@ function AppContent() {
   }, [workspaces]);
   const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
   const prevViewRef = useRef<ViewState>('overview');
-  const [enabledAgentIds, setEnabledAgentIds] = useState<Set<string>>(() => new Set(['pr', 'commit']));
+  const [enabledAgentIds, setEnabledAgentIds] = useState<Set<string>>(() => new Set());
   const agents: AgentItem[] = AVAILABLE_AGENTS.filter(a => enabledAgentIds.has(a.id)).map(a => ({
     id: a.id,
     label: a.label,

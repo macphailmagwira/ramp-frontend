@@ -44,7 +44,6 @@ import {
   Network,
   BookOpen,
   Video,
-  MessageSquare,
   GitPullRequest,
   GitCommit,
   Folder,
@@ -54,7 +53,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   GitBranch,
-  Circle,
   ChevronsUpDown,
   ChevronRight,
   Check,
@@ -67,7 +65,6 @@ import {
   Info,
   LogOut,
   User as UserIcon,
-  Calendar,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -158,7 +155,6 @@ const exploreItems: NavItem[] = [
 
 const syncItems: NavItem[] = [
   { id: 'meetings', label: 'Meetings', icon: Video },
-  { id: 'chat', label: 'Chat', icon: MessageSquare },
 ];
 
 // ─── Row primitive — flat, no borders, subtle hover only ─────────────────────
@@ -548,7 +544,7 @@ function WorkspaceNodes({
       <div key={node.id} className="flex flex-col">
         <div
           className={cn(
-            'group/node flex h-[26px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]',
+            'group/node flex h-[22px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]',
             dragOverId === node.id && 'bg-foreground/[0.06] ring-1 ring-foreground/30'
           )}
           draggable={!!onMoveNode}
@@ -586,12 +582,12 @@ function WorkspaceNodes({
             >
               {expandable && (
                 <ChevronRight
-                  className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
+                  className={cn('h-2.5 w-2.5 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
                 />
               )}
               <Icon
                 className={cn(
-                  'h-3.5 w-3.5 shrink-0',
+                  'h-3 w-3 shrink-0',
                   isFolder ? 'text-foreground/55' : 'text-foreground/35'
                 )}
               />
@@ -745,7 +741,7 @@ function WorkspaceSection({
                     onClick={() => toggleWs(ws.id)}
                     style={{ paddingLeft: 8 }}
                     className={cn(
-                      'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm transition-colors',
+                'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-[13px] transition-colors',
                       open ? 'text-foreground/80' : 'text-foreground/70 hover:text-foreground/90',
                       noFocusRing
                     )}
@@ -908,117 +904,6 @@ function WorkspaceModal({
   );
 }
 
-// ─── Upcoming events section — sync prompt, then today/week agenda ───────────
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  time: string;
-  day?: string;
-}
-
-const TODAY_EVENTS: CalendarEvent[] = [
-  { id: 't1', title: 'Daily standup', time: '9:30 AM' },
-  { id: 't2', title: 'Design review', time: '11:00 AM' },
-  { id: 't3', title: '1:1 with Sam', time: '2:30 PM' },
-  { id: 't4', title: 'Sprint planning', time: '4:00 PM' },
-];
-
-const WEEK_EVENTS: CalendarEvent[] = [
-  { id: 'w1', title: 'Daily standup', time: '9:30 AM', day: 'Mon' },
-  { id: 'w2', title: 'Product demo', time: '10:00 AM', day: 'Tue' },
-  { id: 'w3', title: '1:1 with Sam', time: '2:30 PM', day: 'Wed' },
-  { id: 'w4', title: 'Sprint retro', time: '3:00 PM', day: 'Thu' },
-  { id: 'w5', title: 'All-hands', time: '10:00 AM', day: 'Fri' },
-];
-
-function EventsSection({ isOpen }: { isOpen: boolean }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [synced, setSynced] = useState(false);
-  const [range, setRange] = useState<'today' | 'week'>('today');
-
-  const events = range === 'today' ? TODAY_EVENTS : WEEK_EVENTS;
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="flex flex-col gap-0.5">
-      <div className="group flex h-6 w-full items-center gap-1 rounded px-2 text-xs font-medium text-foreground/40 hover:text-foreground/65">
-        <button
-          onClick={() => setCollapsed(v => !v)}
-          className={cn('flex flex-1 items-center gap-1', noFocusRing)}
-        >
-          <span>Upcoming events</span>
-          <ChevronRight
-            className={cn(
-              'h-3 w-3 shrink-0 opacity-0 transition-transform group-hover:opacity-100',
-              !collapsed && 'rotate-90'
-            )}
-          />
-        </button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              aria-label="Event range"
-              className={cn(
-                'flex items-center rounded p-0.5 text-foreground/55 transition-colors hover:text-foreground',
-                noFocusRing
-              )}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className={cn('w-32', noFocusRing)}>
-            <DropdownMenuItem
-              onClick={() => setRange('today')}
-              className={cn(range === 'today' ? 'font-medium text-foreground' : 'text-foreground/70')}
-            >
-              Today
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setRange('week')}
-              className={cn(range === 'week' ? 'font-medium text-foreground' : 'text-foreground/70')}
-            >
-              Week
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {!collapsed && !synced && (
-        <button
-          onClick={() => setSynced(true)}
-          className={cn(
-            'flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm text-foreground/70 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/90',
-            noFocusRing
-          )}
-        >
-          <Calendar className="h-[15px] w-[15px] shrink-0 text-foreground/55" />
-          <span>Sync your calendar</span>
-        </button>
-      )}
-
-      {!collapsed && synced && (
-        <div className="flex flex-col">
-          {events.map(ev => (
-            <Tooltip key={ev.id}>
-              <TooltipTrigger asChild>
-                <div className="flex h-7 items-center px-2 text-sm">
-                  <span className="truncate text-foreground/80">{ev.title}</span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                {ev.day ? `${ev.day} · ${ev.time}` : ev.time}
-              </TooltipContent>
-            </Tooltip>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Agents section — add new agent + example agents ───────────────────────
 
 function AgentsSection({
@@ -1057,13 +942,10 @@ function AgentsSection({
               )}
             />
           </button>
-          <Tooltip>
+          <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
-                onClick={e => {
-                  e.stopPropagation();
-                  onAddAgent?.();
-                }}
+                onClick={() => onAddAgent?.()}
                 aria-label="Add agent"
                 className={cn(
                   'group/add mr-1 flex h-5 w-5 items-center justify-center rounded text-foreground/45 transition-all duration-200 ease-out',
@@ -1097,14 +979,8 @@ function AgentsSection({
           })}
 
           {agents.length === 0 && (
-            <div className="px-2 py-1.5">
-              <p className="text-xs text-foreground/45">No agents enabled yet.</p>
-              <button
-                onClick={onAddAgent}
-                className="mt-1 text-xs font-medium text-foreground/70 transition-colors hover:text-foreground"
-              >
-                Browse available agents →
-              </button>
+            <div className="flex h-[30px] items-center px-2 text-sm text-foreground/45">
+              No agents enabled yet.
             </div>
           )}
         </>
@@ -1396,28 +1272,28 @@ function UserFooter({
       <DropdownMenuContent
         align={sidebarOpen ? 'start' : 'center'}
         side="top"
-        className={cn('w-44', noFocusRing)}
+        className={cn('w-56 p-1', noFocusRing)}
       >
         <DropdownMenuItem
           onClick={() => onNavigate('settings')}
           className={cn('focus:bg-foreground/[0.045] focus:text-foreground', noFocusRing)}
         >
           <UserIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-          <span className="text-[13px]">Profile</span>
+          <span className="text-sm">Profile</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => onNavigate('team')}
           className={cn('focus:bg-foreground/[0.045] focus:text-foreground', noFocusRing)}
         >
           <Users className="mr-2 h-4 w-4 text-muted-foreground" />
-          <span className="text-[13px]">Team</span>
+          <span className="text-sm">Team</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => onNavigate('settings')}
           className={cn('focus:bg-foreground/[0.045] focus:text-foreground', noFocusRing)}
         >
           <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
-          <span className="text-[13px]">Settings</span>
+          <span className="text-sm">Settings</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -1428,7 +1304,7 @@ function UserFooter({
           )}
         >
           <LogOut className="mr-2 h-4 w-4" />
-          <span className="text-[13px]">Log out</span>
+          <span className="text-sm">Log out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -1567,9 +1443,6 @@ export function Sidebar({
                 ))}
             </div>
 
-            {/* Upcoming events */}
-            <EventsSection isOpen={isOpen} />
-
             {/* Agents */}
             <AgentsSection
               agents={agents}
@@ -1602,61 +1475,44 @@ export function Sidebar({
 
         {/* Footer */}
         <div className="flex shrink-0 flex-col gap-0.5 px-2 pb-2.5">
+          {isOpen && (
+            <div className="flex items-center justify-end">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggle}
+                className={cn(
+                  'h-6 w-6 shrink-0 text-foreground/40 hover:text-foreground/70',
+                  noFocusRing
+                )}
+                aria-label="Collapse sidebar"
+              >
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+
+          {!isOpen && (
+            <div className="flex shrink-0 justify-center">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggle}
+                className={cn('h-6 w-6 text-foreground/40 hover:text-foreground/70', noFocusRing)}
+                aria-label="Expand sidebar"
+              >
+                <PanelLeftOpen className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+
           <UserFooter
             user={user}
             sidebarOpen={isOpen}
             onNavigate={onNavigate}
             onLogout={onLogout}
           />
-
-          <div className="flex items-center justify-between">
-            {isOpen ? (
-              <div className="flex h-8 items-center gap-2 px-1 text-xs text-foreground/40">
-                <Circle className="h-1.5 w-1.5 fill-green-500 text-green-500" />
-                <span>All systems operational</span>
-              </div>
-            ) : (
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <div className="flex h-8 flex-1 items-center justify-center">
-                    <Circle className="h-1.5 w-1.5 fill-green-500 text-green-500" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={10}>
-                  All systems operational
-                </TooltipContent>
-              </Tooltip>
-            )}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onToggle}
-              className={cn(
-                'h-6 w-6 shrink-0 text-foreground/40 hover:text-foreground/70',
-                noFocusRing,
-                !isOpen && 'hidden'
-              )}
-              aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            >
-              <PanelLeftClose className="h-3.5 w-3.5" />
-            </Button>
-          </div>
         </div>
-
-        {!isOpen && (
-          <div className="flex shrink-0 justify-center pb-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onToggle}
-              className={cn('h-6 w-6 text-foreground/40 hover:text-foreground/70', noFocusRing)}
-              aria-label="Expand sidebar"
-            >
-              <PanelLeftOpen className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
       </aside>
     </TooltipProvider>
   );
