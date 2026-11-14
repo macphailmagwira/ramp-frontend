@@ -7,16 +7,19 @@ import {
   ChevronDown,
   Copy,
   Database,
+  ExternalLink,
   FileCode2,
+  FileX2,
   GitBranch,
   Layers,
+  Loader2,
   Lock,
   Maximize,
   Minimize,
   Network,
   Package,
   RefreshCw,
-  Scan,
+  Frame,
   Search,
   Server,
   Sparkles,
@@ -26,7 +29,25 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import { api } from "@/lib/api"
+
+import hljs from "highlight.js"
+import "@/highlight-theme.css"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+
 import { cn } from "@/lib/utils"
+
+// Host element used as the portal target for dialogs (e.g. "Open file") so they
+// stay visible while the flow graph is in fullscreen (native fullscreen only
+// renders the fullscreen element's subtree).
+const DialogHostContext = React.createContext<React.RefObject<HTMLDivElement | null> | null>(null)
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,14 +59,31 @@ import type {
   StorybookLearn,
   StorybookNodeKind,
   StorybookFlow,
+  StorybookFlowStep,
+  StorybookGraphNode,
   StorybookApiGroup,
   StorybookCodebase,
-  StorybookOverview,
+  StorybookFileContentResponse,
 } from "@/types"
 
 // ─── Shared building blocks ────────────────────────────────────────────────────
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
+
+/**
+ * A flow step may arrive with a null `file`/`line` even though it corresponds to
+ * a graph node that has that info. Fall back to the matching node so the
+ * "Open file" button can still highlight and scroll to the right line.
+ */
+function resolveStepLoc(step: StorybookFlowStep, nodes: StorybookGraphNode[]) {
+  const byFile = nodes.find((n) => step.file != null && n.detail.source_file === step.file)
+  const byName = nodes.find((n) => n.label === step.name)
+  const node = byFile ?? byName
+  return {
+    file: step.file ?? node?.detail.source_file ?? null,
+    line: step.line ?? node?.detail.line ?? null,
+  }
+}
 
 /** Same selectable-card look as the run options in SetupStep. */
 const CARD_TRIGGER = cn(
@@ -84,20 +122,316 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
+function escapeHtml(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
+const EXT_LANG: Record<string, string> = {
+  py: "python",
+  js: "javascript",
+  jsx: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  ts: "typescript",
+  tsx: "typescript",
+  go: "go",
+  rb: "ruby",
+  java: "java",
+  kt: "kotlin",
+  rs: "rust",
+  php: "php",
+  cs: "csharp",
+  cpp: "cpp",
+  cc: "cpp",
+  cxx: "cpp",
+  c: "c",
+  h: "c",
+  hpp: "cpp",
+  sh: "bash",
+  bash: "bash",
+  zsh: "bash",
+  yaml: "yaml",
+  yml: "yaml",
+  json: "json",
+  sql: "sql",
+  html: "xml",
+  htm: "xml",
+  xml: "xml",
+  md: "markdown",
+  swift: "swift",
+}
+
+/** Best-effort language guess from a file path/extension for accurate highlighting. */
+function langFromPath(path?: string | null): string | undefined {
+  if (!path) return undefined
+  const ext = path.split(".").pop()?.toLowerCase()
+  return ext ? EXT_LANG[ext] : undefined
+}
+
+function useHighlighted(code: string, language?: string) {
+  return React.useMemo(() => {
+    const text = code ?? ""
+    try {
+      const lang = language ? (hljs.getLanguage(language) ? language : hljs.getLanguage(language.toLowerCase())?.name) : undefined
+      if (lang) {
+        return hljs.highlight(text, { language: lang }).value
+      }
+      return hljs.highlightAuto(text).value
+    } catch {
+      return escapeHtml(text)
+    }
+  }, [code, language])
+}
+
 function CodeBlock({ code, label }: { code: string; label?: string }) {
+  const html = useHighlighted(code)
   if (!code) return null
   return (
-    <div className="min-w-0 overflow-hidden rounded-md border border-zinc-800 bg-zinc-950">
+    <div className="min-w-0 overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
       {label && (
-        <div className="border-b border-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-400">{label}</div>
+          <div className="border-b border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-400 dark:border-zinc-800">{label}</div>
       )}
       <div className="flex items-start justify-between gap-2 py-0.5 pl-3 pr-1">
-        <pre className="max-h-72 overflow-auto whitespace-pre-wrap py-2 font-mono text-xs leading-relaxed text-zinc-50">
-          <code>{code}</code>
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap py-2 font-mono text-xs leading-relaxed">
+          <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
         </pre>
         <CopyButton text={code} />
       </div>
     </div>
+  )
+}
+
+/** Syntax-highlighted code that fills all available space (used inside the popup).
+ *  Lines wrap so long code never forces horizontal scrolling. */
+function CodeView({ code, html }: { code: string; html: string }) {
+  return (
+    <div className="min-w-0 overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950/60 px-3 py-1.5">
+        <span className="text-xs font-medium text-zinc-400">Full code</span>
+        <CopyButton text={code} />
+      </div>
+      <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-words p-3">
+        <code
+          className="hljs block text-[13px] leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      </pre>
+    </div>
+  )
+}
+
+/** A capped, clickable preview of reference code that opens a compact,
+ *  well-wrapped dialog with the full snippet on click. */
+function CodeDialog({
+  code,
+  label,
+  preview,
+  language,
+  icon: Icon = FileCode2,
+}: {
+  code: string
+  label: string
+  preview: string
+  language?: string
+  icon?: LucideIcon
+}) {
+  const html = useHighlighted(code, language)
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="group block w-full overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 text-left outline-none transition-colors hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <div className="relative max-h-44 overflow-hidden">
+            <pre className="whitespace-pre-wrap break-words px-3 py-2 font-mono text-[11px] leading-relaxed text-zinc-300">
+              <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
+            </pre>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-zinc-50 dark:from-zinc-950 to-transparent" />
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-zinc-200 px-3 py-2 text-xs text-zinc-400 dark:border-zinc-800">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Icon className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate font-mono">{preview}</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1 text-primary/80">
+              Expand <Maximize className="size-3" aria-hidden />
+            </span>
+          </div>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="gap-3 sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Icon className="size-4 text-zinc-500" aria-hidden />
+            {label}
+          </DialogTitle>
+        </DialogHeader>
+        <CodeView code={code} html={html} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** Full-file viewer with a line-number gutter and syntax highlighting.
+ *  When `line` is provided, that line is highlighted and scrolled into view so
+ *  the reader lands on the function/symbol they clicked into. */
+function CodeSurface({ code, line, language }: { code: string; line?: number | null; language?: string | null }) {
+  const html = useHighlighted(code, language ?? undefined)
+  const lines = React.useMemo(() => html.split("\n"), [html])
+  const target = line && line > 0 ? line - 1 : -1
+  const targetRef = React.useRef<HTMLDivElement>(null)
+  const scrollRef = React.useRef<HTMLDivElement>(null)
+
+  // Scroll the target line to the center. We wait for the dialog's zoom-in
+  // open animation (~200ms) to finish before measuring, otherwise the scaled
+  // layout throws the scroll off and it gets reset. Smooth so it animates.
+  React.useEffect(() => {
+    if (target < 0) return
+    const container = scrollRef.current
+    const el = targetRef.current
+    if (!container || !el) return
+    let done = false
+    const scrollNow = () => {
+      if (done) return
+      const cRect = container.getBoundingClientRect()
+      const eRect = el.getBoundingClientRect()
+      const top = eRect.top - cRect.top + container.scrollTop
+      const desired = top - container.clientHeight / 2 + el.clientHeight / 2
+      if (Math.abs(container.scrollTop - desired) < 2) {
+        done = true
+        return
+      }
+      container.scrollTo({ top: desired, behavior: "smooth" })
+    }
+    const t1 = window.setTimeout(scrollNow, 250)
+    const t2 = window.setTimeout(scrollNow, 550)
+    return () => {
+      done = true
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+    }
+  }, [target, html, lines.length])
+
+  return (
+    <div ref={scrollRef} className="max-h-[70vh] overflow-auto rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 text-[13px] leading-relaxed">
+      <div className="flex min-w-0">
+        <div
+          aria-hidden
+          className="sticky left-0 z-10 select-none border-r border-zinc-200 bg-zinc-100 py-3 pl-3 pr-2 text-right font-mono text-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-600"
+        >
+          {lines.map((_, i) => (
+            <div key={i} className={cn(target === i && "font-semibold text-primary")}>
+              {i + 1}
+            </div>
+          ))}
+        </div>
+        <pre className="min-w-0 flex-1 py-3">
+          <code className="hljs block whitespace-pre">
+            {lines.map((l, i) => (
+              <div
+                key={i}
+                ref={i === target ? targetRef : undefined}
+                className={cn("px-3", target === i && "bg-primary/15")}
+                dangerouslySetInnerHTML={{ __html: l || " " }}
+              />
+            ))}
+          </code>
+        </pre>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Button that fetches the full contents of a storybook-referenced file and shows
+ * it in a dialog. The backend 404s (with a "source not available" detail) for
+ * binary files, files larger than 1 MB, or anything unreadable at scan time.
+ */
+function OpenFileButton({
+  repoId,
+  filePath,
+  line,
+}: {
+  repoId: string
+  filePath: string
+  line?: number | null
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [state, setState] = React.useState<
+    | { status: "loading" }
+    | { status: "error"; message: string }
+    | { status: "ok"; data: StorybookFileContentResponse }
+  >({ status: "loading" })
+  const dialogHost = React.useContext(DialogHostContext)
+
+  React.useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setState({ status: "loading" })
+    api.ai.storybook
+      .getFileContent(repoId, filePath)
+      .then((data) => {
+        if (!cancelled) setState({ status: "ok", data })
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setState({
+          status: "error",
+          message: err instanceof Error ? err.message : "Source not available.",
+        })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, repoId, filePath])
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="outline" className="shrink-0 gap-1.5">
+          <ExternalLink className="size-3.5" />
+          Open file
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="gap-3 sm:max-w-4xl" container={dialogHost?.current ?? undefined}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <FileCode2 className="size-4 shrink-0 text-zinc-500" aria-hidden />
+            <span className="min-w-0 truncate font-mono text-sm">{filePath}</span>
+          </DialogTitle>
+          {state.status === "ok" && (
+            <p className="text-xs text-muted-foreground">
+              {[state.data.language, state.data.extension, `${state.data.line_count} lines`, formatBytes(state.data.size_bytes)]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          )}
+        </DialogHeader>
+        {state.status === "loading" && (
+          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-4 py-8 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            Loading {filePath}…
+          </div>
+        )}
+        {state.status === "error" && (
+          <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border bg-muted/40 px-4 py-8 text-center">
+            <FileX2 className="size-5 text-muted-foreground" aria-hidden />
+            <p className="text-sm text-muted-foreground">{state.message}</p>
+            <p className="text-xs text-muted-foreground/70">
+              The scanner may have skipped this file (binary, larger than 1&nbsp;MB, or unreadable).
+            </p>
+          </div>
+        )}
+        {state.status === "ok" && <CodeSurface code={state.data.content} line={line} language={state.data.language} />}
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -426,7 +760,17 @@ function edgePath(a: Point, b: Point) {
 
 type View = { x: number; y: number; k: number }
 
-function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolean }) {
+function FlowGraph({
+  flow,
+  showTitle,
+  repoId,
+  warnings = [],
+}: {
+  flow: StorybookFlow
+  showTitle: boolean
+  repoId?: string | null
+  warnings?: string[]
+}) {
   const nodes = flow.graph.nodes
   const edges = flow.graph.edges
   const steps = flow.steps ?? []
@@ -437,6 +781,8 @@ function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolea
   const uid = React.useId().replace(/:/g, "")
 
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const fullRef = React.useRef<HTMLDivElement>(null)
+  const dialogHostRef = React.useRef<HTMLDivElement>(null)
   const drag = React.useRef({ active: false, moved: false, sx: 0, sy: 0, ox: 0, oy: 0 })
   const [view, setView] = React.useState<View>({ x: 0, y: 0, k: 1 })
   const [panning, setPanning] = React.useState(false)
@@ -461,7 +807,7 @@ function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolea
 
   // Real fullscreen where the browser allows it, otherwise a fixed overlay (e.g. iPhone Safari).
   const toggleFull = React.useCallback(async () => {
-    const el = containerRef.current
+    const el = fullRef.current
     if (!el) return
     if (document.fullscreenElement) {
       await document.exitFullscreen().catch(() => {})
@@ -483,21 +829,19 @@ function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolea
   }, [fakeFull])
 
   React.useEffect(() => {
-    const onChange = () => setNativeFull(document.fullscreenElement === containerRef.current)
+    const onChange = () => setNativeFull(document.fullscreenElement === fullRef.current)
     document.addEventListener("fullscreenchange", onChange)
     return () => document.removeEventListener("fullscreenchange", onChange)
   }, [])
 
   React.useEffect(() => {
     if (!fakeFull) return
+    fullRef.current?.scrollIntoView({ block: "start" })
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setFakeFull(false)
     }
-    const prev = document.body.style.overflow
-    document.body.style.overflow = "hidden"
     window.addEventListener("keydown", onKey)
     return () => {
-      document.body.style.overflow = prev
       window.removeEventListener("keydown", onKey)
     }
   }, [fakeFull])
@@ -580,15 +924,25 @@ function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolea
   const kindsPresent = KIND_ORDER.filter((k) => nodes.some((n) => n.kind === k))
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <DialogHostContext.Provider value={dialogHostRef}>
+    <div
+      ref={fullRef}
+      className={cn(
+        "gap-6",
+        isFull
+          ? cn("flex h-[100svh] w-full bg-background", fakeFull && "sticky top-0 z-30")
+          : "grid items-start lg:grid-cols-[minmax(0,1fr)_18rem]"
+      )}
+    >
+      {(showTitle || flow.description) && (
+        <div className={cn("space-y-1", isFull ? "hidden" : "lg:col-span-2")}>
+          {showTitle && <h3 className="text-base font-semibold">{flow.name}</h3>}
+          {flow.description && <p className="max-w-prose text-sm text-muted-foreground">{flow.description}</p>}
+        </div>
+      )}
+
       {/* Canvas */}
-      <div className="min-w-0 space-y-3">
-        {(showTitle || flow.description) && (
-          <div className="space-y-1">
-            {showTitle && <h3 className="text-base font-semibold">{flow.name}</h3>}
-            {flow.description && <p className="max-w-prose text-sm text-muted-foreground">{flow.description}</p>}
-          </div>
-        )}
+       <div className={cn("min-w-0 space-y-3", isFull && "flex min-w-0 flex-1 flex-col")}>
 
         {nodes.length === 0 ? (
           <EmptyState icon={Workflow} title="This flow has no nodes" hint="Regenerate the guide to try again." />
@@ -607,7 +961,7 @@ function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolea
             className={cn(
               "relative touch-pan-y select-none overflow-hidden border-border bg-background",
               isFull
-                ? cn("h-screen w-screen rounded-none border-0", fakeFull && "fixed inset-0 z-50")
+                ? "min-h-0 flex-1 rounded-none border-0"
                 : "h-[26rem] rounded-xl border sm:h-[32rem]",
               panning ? "cursor-grabbing" : "cursor-grab"
             )}
@@ -733,7 +1087,7 @@ function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolea
                 <ZoomIn className="size-3.5" />
               </Button>
               <Button variant="ghost" size="icon" className="size-7" aria-label="Fit to screen" onClick={fit}>
-                <Scan className="size-3.5" />
+                <Frame className="size-3.5" />
               </Button>
               <Button
                 variant="ghost"
@@ -750,28 +1104,66 @@ function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolea
               {isFull ? "Drag to pan. Hold Ctrl and scroll to zoom. Press Esc to exit." : "Drag to pan. Hold Ctrl and scroll to zoom."}
             </p>
 
-            {isFull && (
-              <div className="pointer-events-none absolute left-3 top-3 z-20 max-w-sm rounded-lg border border-border bg-card/90 px-3 py-2 shadow-sm backdrop-blur">
-                <p className="truncate text-sm font-semibold">{flow.name}</p>
-                {flow.description && <p className="line-clamp-2 text-xs text-muted-foreground">{flow.description}</p>}
-              </div>
-            )}
-
-            {isFull && selectedNode && (
-              <div
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                className="absolute bottom-3 right-3 top-16 z-20 w-80 max-w-[calc(100%-1.5rem)] cursor-default overflow-y-auto rounded-xl border border-border bg-card/95 shadow-lg backdrop-blur"
-              >
-                <NodeDetail node={selectedNode} outgoing={outgoing} incoming={incoming} onSelect={(id) => setSelected(id)} />
-              </div>
-            )}
           </div>
         )}
-      </div>
+          {steps.length > 0 && (
+            <section className={cn("min-w-0 space-y-3", isFull && "hidden")}>
+              <SectionHeading icon={Workflow} title="Step by step" count={steps.length} />
+              <ol className="space-y-3">
+                {steps.map((s, i) => {
+                  const loc = resolveStepLoc(s, nodes)
+                  return (
+                  <li key={i}>
+                    <Card>
+                      <CardContent className="grid grid-cols-[2rem_minmax(0,1fr)] gap-4">
+                        <span className="flex size-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                          {i + 1}
+                        </span>
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="font-medium">{s.name}</h4>
+                            {s.type && <Badge variant="secondary">{s.type}</Badge>}
+                          </div>
+                          {s.description && <p className="text-sm text-muted-foreground">{s.description}</p>}
+                          {loc.file && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <FileCode2 className="size-3.5 shrink-0" aria-hidden />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <code className="break-all font-mono text-foreground/80">
+                                    {loc.file}
+                                    {loc.line != null && `:${loc.line}`}
+                                  </code>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs break-all font-mono text-[11px]">
+                                  {loc.file}
+                                  {loc.line != null && `:${loc.line}`}
+                                </TooltipContent>
+                              </Tooltip>
+                              </p>
+                              {repoId && <OpenFileButton repoId={repoId} filePath={loc.file} line={loc.line} />}
+                            </div>
+                          )}
+                          {s.insight && (
+                            <p className="flex items-start gap-1.5 rounded-md bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground">
+                              <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                              {s.insight}
+                            </p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </li>
+                )
+                })}
+              </ol>
+            </section>
+          )}
+        </div>
 
-      {/* Node details and legend */}
-      <aside className="min-w-0 space-y-4">
+        {/* Node details and legend */}
+        <aside className={cn("min-w-0 space-y-4", isFull && "w-80 shrink-0 overflow-y-auto border-l border-border p-4")}>
         <AsidePanel icon={Network} title="Details">
           {selectedNode ? (
             <NodeDetail
@@ -779,6 +1171,7 @@ function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolea
               outgoing={outgoing}
               incoming={incoming}
               onSelect={(id) => setSelected(id)}
+              repoId={repoId}
             />
           ) : (
             <p className="p-4 text-sm text-muted-foreground">
@@ -787,7 +1180,7 @@ function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolea
           )}
         </AsidePanel>
         {kindsPresent.length > 0 && (
-          <AsidePanel icon={Layers} title="Legend" count={kindsPresent.length} defaultOpen={false}>
+          <AsidePanel icon={Layers} title="Legend" count={kindsPresent.length}>
             <ul className="divide-y divide-border">
               {kindsPresent.map((k) => {
                 const m = KIND_META[k]
@@ -809,64 +1202,37 @@ function FlowGraph({ flow, showTitle }: { flow: StorybookFlow; showTitle: boolea
         )}
       </aside>
 
-      {/* Steps */}
-      {steps.length > 0 && (
-        <section className="min-w-0 space-y-3">
-          <SectionHeading icon={Workflow} title="Step by step" count={steps.length} />
-          <ol className="space-y-3">
-            {steps.map((s, i) => (
-              <li key={i}>
-                <Card>
-                  <CardContent className="grid grid-cols-[2rem_minmax(0,1fr)] gap-4">
-                    <span className="flex size-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                      {i + 1}
-                    </span>
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="font-medium">{s.name}</h4>
-                        {s.type && <Badge variant="secondary">{s.type}</Badge>}
-                      </div>
-                      {s.description && <p className="text-sm text-muted-foreground">{s.description}</p>}
-                      {s.file && (
-                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <FileCode2 className="size-3.5 shrink-0" aria-hidden />
-                          <code className="break-all font-mono text-foreground/80">
-                            {s.file}
-                            {s.line != null && `:${s.line}`}
-                          </code>
-                        </p>
-                      )}
-                      {s.insight && (
-                        <p className="flex items-start gap-1.5 rounded-md bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground">
-                          <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                          {s.insight}
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {/* Risks */}
-      {risks.length > 0 && (
-        <aside className="min-w-0">
-          <AsidePanel icon={AlertTriangle} title="Risks to watch" count={risks.length}>
+      {/* Risks & Warnings (combined, collapsed by default) */}
+      {risks.length + warnings.length > 0 && (
+        <aside className={cn("min-w-0", isFull && "hidden")}>
+          <AsidePanel
+            icon={AlertTriangle}
+            title="Risks & Warnings"
+            count={risks.length + warnings.length}
+            defaultOpen={false}
+          >
             <ul className="divide-y divide-amber-400/20">
               {risks.map((r, i) => (
-                <li key={i} className="flex items-start gap-2.5 bg-amber-50/60 px-4 py-3 dark:bg-amber-500/5">
+                <li key={`r-${i}`} className="flex items-start gap-2.5 bg-amber-50/60 px-4 py-3 dark:bg-amber-500/5">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
                   <span className="text-sm text-amber-900/90 dark:text-amber-100/80">{r}</span>
+                </li>
+              ))}
+              {warnings.map((w, i) => (
+                <li key={`w-${i}`} className="flex items-start gap-2.5 px-4 py-3">
+                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-400/25 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                    !
+                  </span>
+                  <span className="text-sm text-amber-900/90 dark:text-amber-100/80">{w}</span>
                 </li>
               ))}
             </ul>
           </AsidePanel>
         </aside>
       )}
+      <div ref={dialogHostRef} className="contents" aria-hidden />
     </div>
+    </DialogHostContext.Provider>
   )
 }
 
@@ -906,11 +1272,13 @@ function NodeDetail({
   outgoing,
   incoming,
   onSelect,
+  repoId,
 }: {
   node: FlowNode
   outgoing: FlowNode[]
   incoming: FlowNode[]
   onSelect: (id: string) => void
+  repoId?: string | null
 }) {
   const m = metaOf(node.kind)
   const Icon = m.icon
@@ -928,30 +1296,42 @@ function NodeDetail({
       </div>
       {d.summary && <p className="text-sm text-muted-foreground">{d.summary}</p>}
       {(d.source_file || d.code_ref || d.line != null) && (
-        <dl className="space-y-1.5 text-xs">
+        <div className="space-y-3">
           {d.source_file && (
-            <div>
-              <dt className="text-muted-foreground">File</dt>
-              <dd>
-                <code className="break-all font-mono text-foreground/80">{d.source_file}</code>
-              </dd>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Source file</p>
+              <div className="flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <code className="min-w-0 flex-1 truncate rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 font-mono text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+                      {d.source_file}
+                    </code>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs break-all font-mono text-[11px]">
+                    {d.source_file}
+                  </TooltipContent>
+                </Tooltip>
+                {repoId && <OpenFileButton repoId={repoId} filePath={d.source_file} line={d.line} />}
+              </div>
             </div>
           )}
           {d.code_ref && (
-            <div>
-              <dt className="text-muted-foreground">Reference</dt>
-              <dd>
-                <code className="break-all font-mono text-foreground/80">{d.code_ref}</code>
-              </dd>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Reference</p>
+              <CodeDialog
+                code={d.code_ref}
+                label="Reference code"
+                preview="View reference code"
+                language={langFromPath(d.source_file)}
+              />
             </div>
           )}
           {d.line != null && (
-            <div>
-              <dt className="text-muted-foreground">Line</dt>
-              <dd className="text-foreground/80">{d.line}</dd>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Line <span className="text-foreground/80">{d.line}</span>
+            </p>
           )}
-        </dl>
+        </div>
       )}
       <NodeLinks title="Calls or uses" nodes={outgoing} onSelect={onSelect} />
       <NodeLinks title="Used by" nodes={incoming} onSelect={onSelect} />
@@ -961,114 +1341,15 @@ function NodeDetail({
 
 // ─── Panels ────────────────────────────────────────────────────────────────────
 
-function OverviewPanel({ overview }: { overview: StorybookOverview }) {
-  const framework = overview.framework ?? []
-  const modules = overview.modules ?? []
-  const entryPoints = overview.entry_points ?? []
-  const connections = overview.connections ?? []
-  const hasAside = framework.length > 0 || entryPoints.length > 0
-
-  if (modules.length === 0 && !hasAside && connections.length === 0) {
-    return (
-      <EmptyState
-        icon={Boxes}
-        title="No overview yet"
-        hint="Regenerate this guide to get a summary of the project's modules."
-      />
-    )
-  }
-
-  return (
-    <div className="space-y-8">
-      <div className={cn("grid items-start gap-6", hasAside && "lg:grid-cols-[minmax(0,1fr)_20rem]")}>
-        <section className="min-w-0 space-y-3">
-          <SectionHeading icon={Boxes} title="Modules" count={modules.length} />
-          <div className="grid gap-3 sm:grid-cols-2">
-            {modules.map((m) => (
-              <Card key={m.name} className="h-full transition-colors hover:border-primary/60">
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                      <Package className="size-4" aria-hidden />
-                    </span>
-                    <h4 className="min-w-0 break-words font-medium leading-snug">{m.name}</h4>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{m.responsibility}</p>
-                  {(m.connects_to ?? []).length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs text-muted-foreground">Works with</span>
-                      {m.connects_to.map((c) => (
-                        <Badge key={c} variant="outline" className="text-[11px]">
-                          {c}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  {(m.key_files ?? []).length > 0 && (
-                    <ul className="space-y-1 border-t border-border pt-3">
-                      {m.key_files.map((f) => (
-                        <li key={f} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <FileCode2 className="size-3.5 shrink-0" aria-hidden />
-                          <code className="break-all font-mono text-foreground/80">{f}</code>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-
-        {hasAside && (
-          <aside className="min-w-0 space-y-4">
-            {framework.length > 0 && (
-              <AsidePanel icon={Layers} title="Built with" count={framework.length}>
-                <div className="flex flex-wrap gap-1.5 p-4">
-                  {framework.map((f) => (
-                    <Badge key={f} variant="secondary">
-                      {f}
-                    </Badge>
-                  ))}
-                </div>
-              </AsidePanel>
-            )}
-            {entryPoints.length > 0 && (
-              <AsidePanel icon={GitBranch} title="Entry points" count={entryPoints.length}>
-                <ul className="divide-y divide-border">
-                  {entryPoints.map((e) => (
-                    <li key={e} className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-accent/40">
-                      <GitBranch className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                      <code className="break-all font-mono text-xs text-foreground/80">{e}</code>
-                    </li>
-                  ))}
-                </ul>
-              </AsidePanel>
-            )}
-          </aside>
-        )}
-      </div>
-
-      {connections.length > 0 && (
-        <section className="space-y-3">
-          <SectionHeading icon={Network} title="How the pieces connect" count={connections.length} />
-          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-            {connections.map((c, i) => (
-              <li key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3 text-sm">
-                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold">{c.from}</code>
-                <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold">{c.to}</code>
-                {c.note && <span className="w-full text-muted-foreground sm:ml-2 sm:w-auto">{c.note}</span>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </div>
-  )
-}
-
-function FlowsPanel({ flows }: { flows: StorybookFlow[] }) {
+export function FlowsPanel({
+  flows,
+  repoId,
+  warnings = [],
+}: {
+  flows: StorybookFlow[]
+  repoId?: string | null
+  warnings?: string[]
+}) {
   if (flows.length === 0) {
     return (
       <EmptyState
@@ -1079,7 +1360,7 @@ function FlowsPanel({ flows }: { flows: StorybookFlow[] }) {
     )
   }
   if (flows.length === 1) {
-    return <FlowGraph key={flows[0].id} flow={flows[0]} showTitle />
+    return <FlowGraph key={flows[0].id} flow={flows[0]} showTitle repoId={repoId} warnings={warnings} />
   }
   return (
     <Tabs defaultValue={flows[0].id} className="gap-5">
@@ -1107,7 +1388,7 @@ function FlowsPanel({ flows }: { flows: StorybookFlow[] }) {
       </TabsList>
       {flows.map((f) => (
         <TabsContent key={f.id} value={f.id}>
-          <FlowGraph flow={f} showTitle={false} />
+          <FlowGraph flow={f} showTitle={false} repoId={repoId} warnings={warnings} />
         </TabsContent>
       ))}
     </Tabs>
@@ -1772,7 +2053,6 @@ type Props = {
   errors?: string[]
 }
 
-const EMPTY_OVERVIEW = { summary: "", framework: [], modules: [], entry_points: [], connections: [] } as unknown as StorybookOverview
 const EMPTY_CODEBASE = {
   modules: [],
   dependencies: [],
@@ -1782,22 +2062,19 @@ const EMPTY_CODEBASE = {
 } as unknown as StorybookCodebase
 
 export function LearnStep({ section, onRegenerate, regenerating = false, errors = [] }: Props) {
-  const overview = section?.overview ?? EMPTY_OVERVIEW
-  const flows = section?.flows ?? []
   const apis = section?.apis ?? []
   const codebase = section?.codebase ?? EMPTY_CODEBASE
   const warnings = section?.warnings ?? []
 
   const endpointCount = apis.reduce((n, g) => n + g.endpoints.length, 0)
-  const moduleCount = (overview.modules ?? []).length
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome to the codebase</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Understand the codebase</h1>
           <p className="max-w-prose text-muted-foreground">
-            {overview.summary || "What is this project, how does it fit together, and where is it implemented?"}
+            Explore the project&apos;s endpoints and browse the code that implements them.
           </p>
         </div>
         {onRegenerate && (
@@ -1849,14 +2126,8 @@ export function LearnStep({ section, onRegenerate, regenerating = false, errors 
         </Collapsible>
       )}
 
-      <Tabs defaultValue="overview" className="gap-6">
-        <TabsList className="grid h-auto w-full auto-rows-fr grid-cols-1 gap-3 bg-transparent p-0 sm:grid-cols-2 lg:grid-cols-4">
-          <TabsTrigger value="overview" className={CARD_TRIGGER}>
-            <TabCard icon={Boxes} title="What am I looking at?" hint={plural(moduleCount, "module")} />
-          </TabsTrigger>
-          <TabsTrigger value="flows" className={CARD_TRIGGER}>
-            <TabCard icon={Workflow} title="How does it work?" hint={plural(flows.length, "flow")} />
-          </TabsTrigger>
+      <Tabs defaultValue="apis" className="gap-6">
+        <TabsList className="grid h-auto w-full auto-rows-fr grid-cols-1 gap-3 bg-transparent p-0 sm:grid-cols-2">
           <TabsTrigger value="apis" className={CARD_TRIGGER}>
             <TabCard icon={Server} title="How do I interact?" hint={plural(endpointCount, "endpoint")} />
           </TabsTrigger>
@@ -1869,12 +2140,6 @@ export function LearnStep({ section, onRegenerate, regenerating = false, errors 
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview">
-          <OverviewPanel overview={overview} />
-        </TabsContent>
-        <TabsContent value="flows">
-          <FlowsPanel flows={flows} />
-        </TabsContent>
         <TabsContent value="apis">
           <ApisPanel apis={apis} />
         </TabsContent>

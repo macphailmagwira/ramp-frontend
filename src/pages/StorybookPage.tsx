@@ -20,6 +20,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { StorybookSidebar } from './storybook/StorybookSidebar';
 import { SetupStep } from './storybook/SetupStep';
 import { LearnStep } from './storybook/LearnStep';
+import { FlowsStep } from './storybook/FlowsStep';
 
 type Phase = 'loading' | 'need-scan' | 'empty' | 'ready' | 'error';
 type Busy = false | 'scan' | 'generate' | 'refresh';
@@ -152,6 +153,7 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
 
   const steps: StorybookStep[] = [
     { id: 'set_up', title: 'Setup & Run', status: stepStatusFor(!!section) },
+    { id: 'flows', title: 'Flows and Features', status: stepStatusFor(!!learn) },
     { id: 'learn', title: 'Understand the codebase', status: stepStatusFor(!!learn) },
   ];
 
@@ -262,6 +264,17 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
             />
           )}
 
+          {!busy && phase === 'ready' && learn && Object.keys(learn).length > 0 && activeId === 'flows' && (
+            <FlowsStep
+              flows={learn.flows ?? []}
+              repoId={repoId}
+              onRegenerate={refresh}
+              regenerating={false}
+              errors={bookErrors}
+              warnings={learn.warnings}
+            />
+          )}
+
           {!busy && phase === 'ready' && learn && Object.keys(learn).length > 0 && activeId === 'learn' && (
             <LearnStep
               section={learn}
@@ -274,19 +287,11 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
           {busy === 'refresh' && section && Object.keys(section).length > 0 && (
             <div className="opacity-60 pointer-events-none">
               {activeId === 'learn' && learn ? (
-                <LearnStep
-                  section={learn}
-                  onRegenerate={refresh}
-                  regenerating
-                  errors={bookErrors}
-                />
+                <LearnStep section={learn} onRegenerate={refresh} regenerating={busy === 'refresh'} errors={bookErrors} />
+              ) : activeId === 'flows' && learn ? (
+                <FlowsStep flows={learn.flows ?? []} repoId={repoId} onRegenerate={refresh} regenerating={busy === 'refresh'} errors={bookErrors} warnings={learn.warnings} />
               ) : (
-                <SetupStep
-                  section={section}
-                  onRegenerate={refresh}
-                  regenerating
-                  errors={bookErrors}
-                />
+                <SetupStep section={section} onRegenerate={refresh} regenerating={busy === 'refresh'} errors={bookErrors} />
               )}
             </div>
           )}

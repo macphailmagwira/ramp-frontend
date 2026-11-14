@@ -513,6 +513,16 @@ export interface StorybookBookResponse {
   book: StorybookBook;
 }
 
+export interface StorybookFileContentResponse {
+  path: string;
+  content: string;
+  language: string | null;
+  extension: string | null;
+  size_bytes: number;
+  is_binary: boolean;
+  line_count: number;
+}
+
 export type StorybookStepStatus = 'ready' | 'generating' | 'failed' | 'locked';
 
 export interface StorybookStep {

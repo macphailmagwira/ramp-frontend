@@ -1,4 +1,4 @@
-import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository, StorybookBookResponse, ArchitectureStoryResponse } from '@/types';
+import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository,   StorybookBookResponse, StorybookFileContentResponse, ArchitectureStoryResponse } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -234,6 +234,13 @@ export const api = {
           `/ai/storybook/${repoId}/refresh`,
           { method: 'POST' },
           { timeout: 15 * 60 * 1000 }
+        ),
+
+      // GET /api/v1/ai/storybook/{connectedRepoId}/file-content?path=...
+      // Returns the full (uncapped) file text for a path referenced in the book.
+      getFileContent: async (repoId: string, path: string): Promise<StorybookFileContentResponse> =>
+        request<StorybookFileContentResponse>(
+          `/ai/storybook/${repoId}/file-content?path=${encodeURIComponent(path)}`
         ),
     },
   },
