@@ -163,11 +163,23 @@ function AppContent() {
   const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
 
+  const isDashboardView = [
+    'overview',
+    'inbox',
+    'agents',
+    'architecture',
+    'docs',
+    'repository-select',
+  ].includes(view);
+
   useEffect(() => {
-    if (isAuthenticating) return;
+    if (isAuthenticating || !isDashboardView) {
+      setIsSidebarOpen(false);
+      return;
+    }
     const t = setTimeout(() => setIsSidebarOpen(true), 500);
     return () => clearTimeout(t);
-  }, [isAuthenticating]);
+  }, [isAuthenticating, isDashboardView]);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>(loadWorkspaces);
   // Persist workspace docs (including edited document bodies) across reloads.
