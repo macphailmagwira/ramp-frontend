@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ChevronRight, ArrowLeft, FileText, RectangleVertical, RectangleHorizontal, History, RotateCcw, Check, AlertCircle, X } from 'lucide-react';
 import { DocsEditor } from '@/components/docs/DocsEditor';
 import { Spinner } from '@/components/ui/spinner';
@@ -221,9 +222,14 @@ export function DocsPage({
       </header>
 
       {/* Body: document + optional in-page history panel */}
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* Document */}
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea
+          className={cn(
+            'min-h-0 min-w-0 flex-1 transition-[padding] duration-300 ease-in-out',
+            historyOpen && 'pr-[340px]',
+          )}
+        >
           <div
             className={cn(
               'mx-auto w-full transition-[max-width,margin] duration-300 ease-in-out',
@@ -253,14 +259,14 @@ export function DocsPage({
           </div>
         </ScrollArea>
 
-        {/* Version history panel — lives inside the doc layout and pushes the content */}
+        {/* Version history panel — anchored to the right edge, never overflows */}
         <aside
           className={cn(
-            'relative h-full shrink-0 overflow-hidden border-l border-border/60 bg-card/40 transition-[width] duration-300 ease-in-out',
+            'absolute inset-y-0 right-0 z-10 h-full shrink-0 overflow-hidden border-l border-border/60 bg-card/40 transition-[width] duration-300 ease-in-out',
             historyOpen ? 'w-[340px]' : 'w-0',
           )}
         >
-          <div className="flex h-full w-[340px] flex-col">
+          <div className="flex h-full w-full flex-col">
             <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
               <div className="flex items-center gap-2">
                 <History className="h-4 w-4 text-muted-foreground" />
@@ -276,8 +282,9 @@ export function DocsPage({
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="flex flex-col gap-0.5 p-3">
+        <TooltipProvider delayDuration={200}>
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
+            <div className="flex flex-col gap-0.5">
                 {versionLoading && (
                   <p className="py-4 text-sm text-muted-foreground">Loading…</p>
                 )}
@@ -289,10 +296,7 @@ export function DocsPage({
                     key={v.version}
                     className="group rounded-md transition-colors hover:bg-foreground/[0.04]"
                   >
-                    <div className="flex items-center gap-2 px-2 py-2">
-                      <span className="w-7 shrink-0 text-[12px] font-medium tabular-nums text-foreground">
-                        v{v.version}
-                      </span>
+                    <div className="flex items-center gap-2 px-2 py-2 pr-8">
                       <button
                         type="button"
                         onClick={() => previewVersion(v.version)}
@@ -305,28 +309,36 @@ export function DocsPage({
                           {v.edited_by} · {relativeTime(v.created_at)}
                         </span>
                       </button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                        onClick={() => restoreVersion(v.version)}
-                        disabled={restoring}
-                        aria-label={`Restore version ${v.version}`}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      </Button>
                     </div>
                     {preview?.version === v.version && (
-                      <pre className="mx-2 mb-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 px-2.5 py-2 text-[11.5px] leading-relaxed text-foreground/80">
-                        {preview.detail.blocks
-                          .map((b) => (b.type === 'divider' ? '—' : b.text))
-                          .join('\n')}
-                      </pre>
+                      <div className="ml-2 mr-8 mb-2 flex items-start gap-2">
+                        <pre className="min-w-0 flex-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 px-2.5 py-2 text-[11.5px] leading-relaxed text-foreground/80">
+                          {preview.detail.blocks
+                            .map((b) => (b.type === 'divider' ? '—' : b.text))
+                            .join('\n')}
+                        </pre>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                              onClick={() => restoreVersion(v.version)}
+                              disabled={restoring}
+                              aria-label={`Restore version ${v.version}`}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="left">Restore this version</TooltipContent>
+                        </Tooltip>
+                      </div>
                     )}
                   </div>
                 ))}
-              </div>
-            </ScrollArea>
+            </div>
+          </div>
+        </TooltipProvider>
           </div>
         </aside>
       </div>
