@@ -369,7 +369,7 @@ export const api = {
     renameNode: async (
       wsId: string,
       nodeId: string,
-      payload: { label?: string }
+      payload: { label?: string; title?: string }
     ): Promise<ApiKnowledgeNode> =>
       request<ApiKnowledgeNode>(`/workspaces/${wsId}/nodes/${nodeId}`, {
         method: 'PATCH',

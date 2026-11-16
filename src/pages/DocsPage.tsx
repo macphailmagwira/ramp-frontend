@@ -4,19 +4,25 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { ChevronRight, ArrowLeft, FileText, RectangleVertical, RectangleHorizontal, History, RotateCcw, Check, AlertCircle } from 'lucide-react';
+import { ChevronRight, ArrowLeft, FileText, RectangleVertical, RectangleHorizontal, History, RotateCcw, Check, AlertCircle, X } from 'lucide-react';
 import { DocsEditor } from '@/components/docs/DocsEditor';
 import { Spinner } from '@/components/ui/spinner';
 
 type Orientation = 'portrait' | 'landscape';
 
 const ORIENTATION_KEY = 'ramp_doc_orientation';
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 interface DocsPageVersions {
   list: () => Promise<VersionSummary[]>;
@@ -121,7 +127,6 @@ export function DocsPage({
   };
 
   return (
-    <>
     <div className="flex h-full flex-col bg-background">
       {/* Breadcrumb bar */}
       <header className="flex shrink-0 items-center gap-2 bg-card/30 px-4 py-2.5 backdrop-blur-sm">
@@ -215,93 +220,116 @@ export function DocsPage({
         )}
       </header>
 
-      {/* Document */}
-      <ScrollArea className="min-h-0 flex-1">
-        <div
+      {/* Body: document + optional in-page history panel */}
+      <div className="flex min-h-0 flex-1">
+        {/* Document */}
+        <ScrollArea className="min-h-0 flex-1">
+          <div
+            className={cn(
+              'mx-auto w-full transition-[max-width,margin] duration-300 ease-in-out',
+              orientation === 'portrait' ? 'my-8 max-w-[760px]' : 'my-0 max-w-[4000px]',
+            )}
+          >
+            <div className="px-6 py-10 sm:px-12">
+              <div className="mb-1 flex items-center gap-2 text-foreground/40">
+                <FileText className="h-4 w-4" />
+                <span className="text-[11px] font-medium uppercase tracking-[0.08em]">Document</span>
+              </div>
+
+              <input
+                value={titleDraft}
+                onChange={e => commitTitle(e.target.value)}
+                placeholder="Untitled"
+                className={cn(
+                  'mb-2 w-full border-0 bg-transparent text-[34px] font-bold leading-tight tracking-tight text-foreground outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                  'placeholder:text-foreground/25',
+                )}
+              />
+
+              <Separator className="mb-4" />
+
+              <DocsEditor blocks={blocks} onChange={onUpdateContent} />
+            </div>
+          </div>
+        </ScrollArea>
+
+        {/* Version history panel — lives inside the doc layout and pushes the content */}
+        <aside
           className={cn(
-            'mx-auto w-full transition-[max-width,margin] duration-300 ease-in-out',
-            orientation === 'portrait' ? 'my-8 max-w-[760px]' : 'my-0 max-w-[4000px]',
+            'relative h-full shrink-0 overflow-hidden border-l border-border/60 bg-card/40 transition-[width] duration-300 ease-in-out',
+            historyOpen ? 'w-[340px]' : 'w-0',
           )}
         >
-          <div className="px-6 py-10 sm:px-12">
-            <div className="mb-1 flex items-center gap-2 text-foreground/40">
-              <FileText className="h-4 w-4" />
-              <span className="text-[11px] font-medium uppercase tracking-[0.08em]">Document</span>
+          <div className="flex h-full w-[340px] flex-col">
+            <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-muted-foreground" />
+                <span className="text-[13px] font-semibold">Version history</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setHistoryOpen(false)}
+                aria-label="Close history"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-
-            <input
-              value={titleDraft}
-              onChange={e => commitTitle(e.target.value)}
-              placeholder="Untitled"
-              className={cn(
-                'mb-2 w-full border-0 bg-transparent text-[34px] font-bold leading-tight tracking-tight text-foreground outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
-                'placeholder:text-foreground/25',
-              )}
-            />
-
-            <Separator className="mb-4" />
-
-            <DocsEditor blocks={blocks} onChange={onUpdateContent} />
-          </div>
-        </div>
-      </ScrollArea>
-    </div>
-
-      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Version history</DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
-            {versionLoading && (
-              <p className="px-1 py-4 text-sm text-muted-foreground">Loading…</p>
-            )}
-            {!versionLoading && versionList && versionList.length === 0 && (
-              <p className="px-1 py-4 text-sm text-muted-foreground">No versions yet.</p>
-            )}
-            <div className="flex flex-col gap-1">
-              {versionList?.map((v) => (
-                <div key={v.version} className="rounded-md border border-border/60 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium">Version {v.version}</div>
-                      <div className="truncate text-[12px] text-muted-foreground">
-                        {v.label || 'Untitled'} · {v.edited_by} ·{' '}
-                        {new Date(v.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="flex flex-col gap-0.5 p-3">
+                {versionLoading && (
+                  <p className="py-4 text-sm text-muted-foreground">Loading…</p>
+                )}
+                {!versionLoading && versionList && versionList.length === 0 && (
+                  <p className="py-4 text-sm text-muted-foreground">No versions yet.</p>
+                )}
+                {versionList?.map((v) => (
+                  <div
+                    key={v.version}
+                    className="group rounded-md transition-colors hover:bg-foreground/[0.04]"
+                  >
+                    <div className="flex items-center gap-2 px-2 py-2">
+                      <span className="w-7 shrink-0 text-[12px] font-medium tabular-nums text-foreground">
+                        v{v.version}
+                      </span>
+                      <button
+                        type="button"
                         onClick={() => previewVersion(v.version)}
+                        className="flex min-w-0 flex-1 flex-col items-start text-left"
                       >
-                        Preview
-                      </Button>
+                        <span className="w-full truncate text-[12.5px] text-foreground/90">
+                          {v.label || 'Untitled'}
+                        </span>
+                        <span className="truncate text-[11px] text-muted-foreground/70">
+                          {v.edited_by} · {relativeTime(v.created_at)}
+                        </span>
+                      </button>
                       <Button
-                        variant="outline"
-                        size="sm"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
                         onClick={() => restoreVersion(v.version)}
                         disabled={restoring}
+                        aria-label={`Restore version ${v.version}`}
                       >
-                        <RotateCcw className="mr-1 h-3.5 w-3.5" />
-                        Restore
+                        <RotateCcw className="h-3.5 w-3.5" />
                       </Button>
                     </div>
+                    {preview?.version === v.version && (
+                      <pre className="mx-2 mb-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 px-2.5 py-2 text-[11.5px] leading-relaxed text-foreground/80">
+                        {preview.detail.blocks
+                          .map((b) => (b.type === 'divider' ? '—' : b.text))
+                          .join('\n')}
+                      </pre>
+                    )}
                   </div>
-                  {preview?.version === v.version && (
-                    <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted/50 p-2 text-[12px]">
-                      {preview.detail.blocks
-                        .map((b) => (b.type === 'divider' ? '—' : b.text))
-                        .join('\n')}
-                    </pre>
-                  )}
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-    </>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </aside>
+      </div>
+    </div>
   );
 }

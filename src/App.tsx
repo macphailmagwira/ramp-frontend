@@ -114,6 +114,7 @@ function buildTree(flat: ApiKnowledgeNode[]): KnowledgeNode[] {
       id: n.id,
       type: n.type,
       label: n.label,
+      title: n.title,
       version: n.version,
       parent_id: n.parent_id,
       children: [],
@@ -130,6 +131,7 @@ function buildTree(flat: ApiKnowledgeNode[]): KnowledgeNode[] {
     id: node.id,
     type: node.type,
     label: node.label,
+    title: node.title,
     version: node.version,
     ...(node.type === 'folder'
       ? { children: node._kids.length ? node._kids.map(finalize) : [] }
@@ -219,7 +221,7 @@ function AppContent() {
     try {
       const res = await api.workspaces.getContent(wsId, docId);
       docCache.current[docId] = res
-        ? { content: res.blocks, version: res.version, title: res.label }
+        ? { content: res.blocks, version: res.version, title: res.title }
         : { content: empty(), version: undefined, title: undefined };
     } catch {
       docCache.current[docId] = { content: empty(), version: undefined, title: undefined };
@@ -233,14 +235,16 @@ function AppContent() {
     const ws = st.ws;
     const cached = docCache.current[docId];
     if (!cached || !cached.content) return;
-    // The backend keys/validates the content upsert on the node's label, so we
-    // must send it (plus title); a label-less PUT is accepted but persists nothing.
+    // `label` is the file name and must stay intact (the backend mirrors content
+    // `label` onto the node, so writing the title here would overwrite the file
+    // name). The title lives in the node's separate `title` field, persisted via
+    // handleRenameDocTitle → renameNode.
     const wsNode = workspaces.find(w => w.id === ws);
     const node = wsNode ? findKnowledgeNode(wsNode.nodes, docId) : undefined;
     setSaveStatus(s => ({ ...s, [docId]: 'saving' }));
     try {
       const res = await api.workspaces.putContent(ws, docId, {
-        label: cached.title ?? node?.label,
+        label: node?.label,
         blocks: cached.content,
         base_version: cached.version,
       });
@@ -289,7 +293,7 @@ function AppContent() {
     });
   }, [runSave]);
 
-  const scheduleRename = useCallback((ws: string, id: string, patch: { label?: string }) => {
+  const scheduleRename = useCallback((ws: string, id: string, patch: { label?: string; title?: string }) => {
     const st = (renameState.current[id] ??= {});
     st.ws = ws;
     st.patch = patch;
@@ -589,8 +593,8 @@ function AppContent() {
     scheduleRename(workspaceId, id, { label: trimmed });
   };
 
-  // Header/title edits update only the document title, persisted in the content
-  // (content.label), never the node's file-name `label`.
+  // Header/title edits update the node's separate `title` field (never its
+  // file-name `label`), and also keep the local content cache in sync.
   const handleRenameDocTitle = (workspaceId: string, docId: string, title: string) => {
     if (!title.trim()) return;
     const trimmed = title.trim();
@@ -599,6 +603,7 @@ function AppContent() {
       title: trimmed,
     };
     force();
+    scheduleRename(workspaceId, docId, { title: trimmed });
     scheduleSave(workspaceId, docId);
   };
 
@@ -694,12 +699,17 @@ function AppContent() {
       };
       const node = walk(ws.nodes);
       if (node) {
+        // The breadcrumb should reflect the document's editable title, not its
+        // underlying file name (node.label).
+        const docPath = path.map(p => ({ ...p }));
+        const last = docPath[docPath.length - 1];
+        if (last) last.label = docCache.current[node.id]?.title ?? node.title ?? last.label;
         return {
           workspaceId: ws.id,
           workspaceIcon: ws.icon,
           workspaceLabel: ws.label,
           node,
-          path: path.map(p => ({ ...p })),
+          path: docPath,
         };
       }
     }
@@ -939,7 +949,7 @@ function AppContent() {
             path={doc.path}
             docId={doc.node.id}
             workspaceId={doc.workspaceId}
-            title={docCache.current[doc.node.id]?.title ?? doc.node.label}
+            title={docCache.current[doc.node.id]?.title ?? doc.node.title ?? doc.node.label}
             blocks={blocks}
             versions={{
               list: () => api.workspaces.listVersions(doc.workspaceId, doc.node.id),

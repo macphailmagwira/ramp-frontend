@@ -89,6 +89,8 @@ export interface KnowledgeNode {
   id: string;
   type: KnowledgeNodeType;
   label: string;
+  /** Display title, independent of the file-name `label`. */
+  title?: string;
   children?: KnowledgeNode[];
   /** Document body, present only on `file` nodes whose content has been loaded. */
   content?: DocBlock[];
@@ -1058,8 +1060,8 @@ function RepoSwitcher({
       aria-expanded={open}
       aria-label="Switch repository"
     >
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary text-primary-foreground">
-        <GitBranch className="h-3 w-3" />
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded bg-neutral-900 p-0.5">
+        <img src="/ramp_logo.avif" alt="Logo" className="h-4 w-4" />
       </span>
       {sidebarOpen && (
         <>

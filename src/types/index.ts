@@ -577,6 +577,8 @@ export interface ApiKnowledgeNode {
   parent_id: string | null;
   type: 'folder' | 'file';
   label: string;
+  /** Display title, independent of the file-name `label`. */
+  title?: string;
   version: number;
   updated_at: string;
   updated_by: string;
@@ -585,6 +587,8 @@ export interface ApiKnowledgeNode {
 export interface ContentResponse {
   id: string;
   label: string;
+  /** Display title, independent of the file-name `label`. */
+  title?: string;
   blocks: DocBlock[];
   version: number;
   updated_at: string;
@@ -592,6 +596,8 @@ export interface ContentResponse {
 
 export interface PutContentRequest {
   label?: string;
+  /** Display title, persisted separately from the file-name `label`. */
+  title?: string;
   blocks: DocBlock[];
   base_version?: number;
 }
