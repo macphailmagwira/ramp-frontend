@@ -609,7 +609,7 @@ function WorkspaceNodes({
                 fill={isFolder ? 'currentColor' : 'none'}
                 className={cn(
                   'h-3 w-3 shrink-0',
-                  isFolder ? 'text-foreground/70' : 'text-foreground/35'
+                  isFolder ? 'text-foreground/40 dark:text-foreground/70' : 'text-foreground/35'
                 )}
               />
               <span className="flex-1 truncate text-left">{node.label}</span>
