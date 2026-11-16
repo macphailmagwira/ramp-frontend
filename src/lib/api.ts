@@ -1,4 +1,4 @@
-import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository,   StorybookBookResponse, StorybookFileContentResponse, ArchitectureStoryResponse } from '@/types';
+import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository,   StorybookBookResponse, StorybookFileContentResponse, ArchitectureStoryResponse, ApiKnowledgeNode, ContentResponse, PutContentRequest, VersionSummary, VersionDetail, RestoreVersionResponse, WorkspaceMember, WorkspaceRole } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -67,7 +67,8 @@ async function request<T = any>(
     const err = new Error(
       (data as { detail?: string }).detail || `Request failed (${res.status})`
     );
-    (err as Error & { status?: number }).status = res.status;
+    (err as Error & { status?: number; data?: unknown }).status = res.status;
+    (err as Error & { status?: number; data?: unknown }).data = data;
     throw err;
   }
 
@@ -300,4 +301,151 @@ export const api = {
       return request(`/github/${repoId}/sync-status`);
     },
   },
+
+  workspaces: {
+    // ── Workspaces ──
+    list: async (): Promise<WorkspaceResponse[]> =>
+      request<WorkspaceResponse[]>('/workspaces'),
+
+    create: async (payload: { label: string; icon?: string }): Promise<WorkspaceResponse> =>
+      request<WorkspaceResponse>('/workspaces', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    update: async (
+      wsId: string,
+      payload: { label?: string; icon?: string }
+    ): Promise<WorkspaceResponse> =>
+      request<WorkspaceResponse>(`/workspaces/${wsId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+
+    remove: async (wsId: string): Promise<void> => {
+      await request(`/workspaces/${wsId}`, { method: 'DELETE' });
+    },
+
+    // ── Members (team sharing) ──
+    listMembers: async (wsId: string): Promise<WorkspaceMember[]> =>
+      request<WorkspaceMember[]>(`/workspaces/${wsId}/members`),
+
+    addMember: async (
+      wsId: string,
+      payload: { user_id?: string; email?: string; role: WorkspaceRole }
+    ): Promise<WorkspaceMember> =>
+      request<WorkspaceMember>(`/workspaces/${wsId}/members`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    updateMember: async (
+      wsId: string,
+      userId: string,
+      payload: { role: WorkspaceRole }
+    ): Promise<WorkspaceMember> =>
+      request<WorkspaceMember>(`/workspaces/${wsId}/members/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+
+    removeMember: async (wsId: string, userId: string): Promise<void> => {
+      await request(`/workspaces/${wsId}/members/${userId}`, { method: 'DELETE' });
+    },
+
+    // ── Nodes (folder/file tree) ──
+    listNodes: async (wsId: string): Promise<ApiKnowledgeNode[]> =>
+      request<ApiKnowledgeNode[]>(`/workspaces/${wsId}/nodes`),
+
+    createNode: async (
+      wsId: string,
+      payload: { parent_id: string | null; type: 'folder' | 'file'; label: string; title?: string }
+    ): Promise<ApiKnowledgeNode> =>
+      request<ApiKnowledgeNode>(`/workspaces/${wsId}/nodes`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    renameNode: async (
+      wsId: string,
+      nodeId: string,
+      payload: { label?: string }
+    ): Promise<ApiKnowledgeNode> =>
+      request<ApiKnowledgeNode>(`/workspaces/${wsId}/nodes/${nodeId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+
+    deleteNode: async (wsId: string, nodeId: string): Promise<void> => {
+      await request(`/workspaces/${wsId}/nodes/${nodeId}`, { method: 'DELETE' });
+    },
+
+    moveNode: async (
+      wsId: string,
+      nodeId: string,
+      payload: { new_parent_id: string | null }
+    ): Promise<void> => {
+      await request(`/workspaces/${wsId}/nodes/${nodeId}/move`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    // ── Document content + version history ──
+    getContent: async (
+      wsId: string,
+      nodeId: string
+    ): Promise<ContentResponse | null> => {
+      try {
+        return await request<ContentResponse>(
+          `/workspaces/${wsId}/nodes/${nodeId}/content`
+        );
+      } catch (err) {
+        if (err instanceof Error && (err as Error & { status?: number }).status === 404) {
+          return null;
+        }
+        throw err;
+      }
+    },
+
+    putContent: async (
+      wsId: string,
+      nodeId: string,
+      payload: PutContentRequest
+    ): Promise<ContentResponse> =>
+      request<ContentResponse>(`/workspaces/${wsId}/nodes/${nodeId}/content`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }),
+
+    listVersions: async (wsId: string, nodeId: string): Promise<VersionSummary[]> =>
+      request<VersionSummary[]>(`/workspaces/${wsId}/nodes/${nodeId}/versions`),
+
+    getVersion: async (
+      wsId: string,
+      nodeId: string,
+      version: number
+    ): Promise<VersionDetail> =>
+      request<VersionDetail>(`/workspaces/${wsId}/nodes/${nodeId}/versions/${version}`),
+
+    restoreVersion: async (
+      wsId: string,
+      nodeId: string,
+      version: number
+    ): Promise<RestoreVersionResponse> =>
+      request<RestoreVersionResponse>(
+        `/workspaces/${wsId}/nodes/${nodeId}/versions/${version}/restore`,
+        { method: 'POST' }
+      ),
+  },
 };
+
+export interface WorkspaceResponse {
+  id: string;
+  owner_id: string;
+  label: string;
+  icon: string;
+  role: WorkspaceRole;
+  created_at: string;
+  updated_at: string;
+}

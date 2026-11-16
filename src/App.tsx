@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useReducer } from 'react';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 
 const STATIC_GREYS = [
@@ -10,10 +10,13 @@ const STATIC_GREYS = [
 ];
 
 
-import type { ViewState, Repository, User, ApiRepository, ApiConnectedRepository, DocBlock } from '@/types';
+import type { ViewState, Repository, User, ApiRepository, ApiConnectedRepository, DocBlock, ApiKnowledgeNode } from '@/types';
 import { mockTeamMembers } from '@/data/mock';
 import { api, getToken, setToken } from '@/lib/api';
 import { Video, MessageSquare } from 'lucide-react';
+import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Toaster } from '@/components/ui/sonner';
 
 // Layout Components
 import { Sidebar, type KnowledgeNode, type Workspace, type AgentItem } from '@/components/layout/Sidebar';
@@ -98,58 +101,42 @@ const toUser = (apiUser: any): User => {
 const connectedRepoKey = (userId?: string | null) =>
   userId ? `ramp_connected_repo_id_${userId}` : 'ramp_connected_repo_id';
 
-const WORKSPACES_STORAGE_KEY = 'ramp_workspaces';
+// Build a nested KnowledgeNode tree from the backend's flat, parent_id-keyed list.
+interface TreeBuilderNode extends KnowledgeNode {
+  _kids: TreeBuilderNode[];
+  parent_id?: string | null;
+}
 
-const SEED_WORKSPACES: Workspace[] = [
-  {
-    id: 'ws-engineering',
-    label: 'Engineering',
-    icon: '📘',
-    nodes: [
-      {
-        id: 'getting-started',
-        type: 'folder',
-        label: 'Getting started',
-        children: [
-          { id: 'setup-guide', type: 'file', label: 'Setup guide' },
-          { id: 'onboarding', type: 'file', label: 'Onboarding' },
-        ],
-      },
-      {
-        id: 'architecture',
-        type: 'folder',
-        label: 'Architecture',
-        children: [
-          { id: 'system-overview', type: 'file', label: 'System overview' },
-          { id: 'data-flow', type: 'file', label: 'Data flow' },
-          { id: 'api-contracts', type: 'file', label: 'API contracts' },
-        ],
-      },
-      {
-        id: 'runbooks',
-        type: 'folder',
-        label: 'Runbooks',
-        children: [
-          { id: 'deploy', type: 'file', label: 'Deploy' },
-          { id: 'rollback', type: 'file', label: 'Rollback' },
-        ],
-      },
-    ],
-  },
-];
-
-const loadWorkspaces = (): Workspace[] => {
-  try {
-    const raw = localStorage.getItem(WORKSPACES_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed as Workspace[];
-    }
-  } catch {
-    /* ignore malformed storage */
+function buildTree(flat: ApiKnowledgeNode[]): KnowledgeNode[] {
+  const map = new Map<string, TreeBuilderNode>();
+  for (const n of flat) {
+    map.set(n.id, {
+      id: n.id,
+      type: n.type,
+      label: n.label,
+      version: n.version,
+      parent_id: n.parent_id,
+      children: [],
+      _kids: [],
+    });
   }
-  return SEED_WORKSPACES;
-};
+  const roots: TreeBuilderNode[] = [];
+  for (const node of map.values()) {
+    const pid = node.parent_id;
+    if (pid && map.has(pid)) map.get(pid)!._kids.push(node);
+    else roots.push(node);
+  }
+  const finalize = (node: TreeBuilderNode): KnowledgeNode => ({
+    id: node.id,
+    type: node.type,
+    label: node.label,
+    version: node.version,
+    ...(node.type === 'folder'
+      ? { children: node._kids.length ? node._kids.map(finalize) : [] }
+      : {}),
+  });
+  return roots.map(finalize);
+}
 
 function AppContent() {
   const [view, setView] = useState<ViewState>('login');
@@ -181,16 +168,144 @@ function AppContent() {
     return () => clearTimeout(t);
   }, [isAuthenticating, isDashboardView]);
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(loadWorkspaces);
-  // Persist workspace docs (including edited document bodies) across reloads.
-  useEffect(() => {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
+
+  // Loaded document bodies + their server version, keyed by node id.
+  // `title` is the document header, persisted in the content (content.label),
+  // independent of the node's file-name `label`.
+  const docCache = useRef<Record<string, { content?: DocBlock[]; version?: number; title?: string }>>({});
+  const saveState = useRef<Record<string, { ws?: string; timer?: ReturnType<typeof setTimeout> }>>({});
+  const renameState = useRef<Record<string, { ws?: string; patch?: { label?: string; title?: string }; timer?: ReturnType<typeof setTimeout> }>>({});
+  const [conflictBump, setConflictBump] = useState(0);
+  const [, forceDispatch] = useReducer((x: number) => x + 1, 0);
+  const force = () => forceDispatch();
+
+  const fetchWorkspaces = useCallback(async () => {
     try {
-      localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(workspaces));
-    } catch {
-      /* storage may be unavailable; editing still works in-memory */
+      const list = await api.workspaces.list();
+      const withNodes = await Promise.all(
+        list.map(async (ws) => {
+          let nodes: KnowledgeNode[] = [];
+          try {
+            nodes = buildTree(await api.workspaces.listNodes(ws.id));
+          } catch {
+            /* tree unavailable for this workspace */
+          }
+          return { ...ws, nodes };
+        })
+      );
+      setWorkspaces(withNodes);
+    } catch (err) {
+      console.error('Failed to load workspaces', err);
+    } finally {
+      setWorkspacesLoaded(true);
     }
-  }, [workspaces]);
+  }, []);
+
+  const refreshNodes = useCallback(async (wsId: string) => {
+    try {
+      const flat = await api.workspaces.listNodes(wsId);
+      setWorkspaces((prev) =>
+        prev.map((w) => (w.id === wsId ? { ...w, nodes: buildTree(flat) } : w))
+      );
+    } catch (err) {
+      console.error('Failed to refresh workspace nodes', err);
+    }
+  }, []);
+
+  const loadDocContent = useCallback(async (wsId: string, docId: string) => {
+    const empty = (): DocBlock[] => [{ id: crypto.randomUUID(), type: 'paragraph', text: '' }];
+    try {
+      const res = await api.workspaces.getContent(wsId, docId);
+      docCache.current[docId] = res
+        ? { content: res.blocks, version: res.version, title: res.label }
+        : { content: empty(), version: undefined, title: undefined };
+    } catch {
+      docCache.current[docId] = { content: empty(), version: undefined, title: undefined };
+    }
+    force();
+  }, []);
+
+  const runSave = useCallback(async (docId: string) => {
+    const st = saveState.current[docId];
+    if (!st || !st.ws) return;
+    const ws = st.ws;
+    const cached = docCache.current[docId];
+    if (!cached || !cached.content) return;
+    // The backend keys/validates the content upsert on the node's label, so we
+    // must send it (plus title); a label-less PUT is accepted but persists nothing.
+    const wsNode = workspaces.find(w => w.id === ws);
+    const node = wsNode ? findKnowledgeNode(wsNode.nodes, docId) : undefined;
+    setSaveStatus(s => ({ ...s, [docId]: 'saving' }));
+    try {
+      const res = await api.workspaces.putContent(ws, docId, {
+        label: cached.title ?? node?.label,
+        blocks: cached.content,
+        base_version: cached.version,
+      });
+      docCache.current[docId] = { ...cached, version: res.version };
+      setSaveStatus(s => ({ ...s, [docId]: 'saved' }));
+      setTimeout(() => setSaveStatus(s => { if (s[docId] !== 'saved') return s; const n = { ...s }; delete n[docId]; return n; }), 1500);
+    } catch (err) {
+      const e = err as Error & {
+        status?: number;
+        data?: { version: number; blocks: DocBlock[] };
+      };
+      if (e.status === 409 && e.data) {
+        docCache.current[docId] = { content: e.data.blocks, version: e.data.version };
+        setConflictBump((b) => b + 1);
+        setSaveStatus(s => ({ ...s, [docId]: 'saved' }));
+        setTimeout(() => setSaveStatus(s => { if (s[docId] !== 'saved') return s; const n = { ...s }; delete n[docId]; return n; }), 1500);
+        toast('This document was edited elsewhere. The latest version was loaded.');
+      } else {
+        console.error('Failed to save document', err);
+        setSaveStatus(s => ({ ...s, [docId]: 'error' }));
+      }
+    }
+  }, []);
+
+  const scheduleSave = useCallback(
+    (ws: string, docId: string) => {
+      const st = (saveState.current[docId] ??= { ws });
+      st.ws = ws;
+      if (st.timer) clearTimeout(st.timer);
+      st.timer = setTimeout(() => {
+        st.timer = undefined;
+        void runSave(docId);
+      }, 600);
+    },
+    [runSave]
+  );
+
+  const flushSave = useCallback(() => {
+    Object.keys(saveState.current).forEach((docId) => {
+      const st = saveState.current[docId];
+      if (st?.timer) {
+        clearTimeout(st.timer);
+        st.timer = undefined;
+        void runSave(docId);
+      }
+    });
+  }, [runSave]);
+
+  const scheduleRename = useCallback((ws: string, id: string, patch: { label?: string }) => {
+    const st = (renameState.current[id] ??= {});
+    st.ws = ws;
+    st.patch = patch;
+    setSaveStatus(s => ({ ...s, [id]: 'saving' }));
+    if (st.timer) clearTimeout(st.timer);
+    st.timer = setTimeout(() => {
+      st.timer = undefined;
+      if (st.ws && st.patch) {
+        void api.workspaces.renameNode(st.ws, id, st.patch)
+          .then(() => setSaveStatus(s => ({ ...s, [id]: 'saved' })))
+          .catch(() => setSaveStatus(s => ({ ...s, [id]: 'error' })));
+      }
+    }, 600);
+  }, []);
   const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
+  const [saveStatus, setSaveStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({});
   const prevViewRef = useRef<ViewState>('overview');
   const [enabledAgentIds, setEnabledAgentIds] = useState<Set<string>>(() => new Set());
   const agents: AgentItem[] = AVAILABLE_AGENTS.filter(a => enabledAgentIds.has(a.id)).map(a => ({
@@ -243,6 +358,7 @@ function AppContent() {
 
   const navigateToDashboard = useCallback(async (currentUser: User) => {
     setUser(currentUser);
+    fetchWorkspaces();
     try {
       setGithubConnected(null);
       const conns = await loadConnectedRepositories();
@@ -272,7 +388,7 @@ function AppContent() {
     } finally {
       setIsAuthenticating(false);
     }
-  }, [loadConnectedRepositories, loadRepositories]);
+  }, [loadConnectedRepositories, loadRepositories, fetchWorkspaces]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -403,15 +519,18 @@ function AppContent() {
     });
   };
 
-  const handleCreateNode = (workspaceId: string, parentId: string | null, type: KnowledgeNode['type'], label: string) => {
-    updateWorkspaceNodes(workspaceId, prev =>
-      insertKnowledgeNode(prev, parentId, {
-        id: crypto.randomUUID(),
-        type,
-        label,
-        ...(type === 'folder' ? { children: [] } : {}),
-      })
-    );
+  const handleCreateNode = async (
+    workspaceId: string,
+    parentId: string | null,
+    type: KnowledgeNode['type'],
+    label: string
+  ) => {
+    try {
+      await api.workspaces.createNode(workspaceId, { parent_id: parentId, type, label });
+      await refreshNodes(workspaceId);
+    } catch (err) {
+      console.error('Failed to create node', err);
+    }
   };
 
   const findKnowledgeNode = (nodes: KnowledgeNode[], id: string): KnowledgeNode | null => {
@@ -465,14 +584,39 @@ function AppContent() {
 
   const handleRenameNode = (workspaceId: string, id: string, label: string) => {
     if (!label.trim()) return;
-    updateWorkspaceNodes(workspaceId, prev => renameKnowledgeNode(prev, id, label.trim()));
+    const trimmed = label.trim();
+    updateWorkspaceNodes(workspaceId, prev => renameKnowledgeNode(prev, id, trimmed));
+    scheduleRename(workspaceId, id, { label: trimmed });
   };
 
-  const handleDeleteNode = (workspaceId: string, id: string) => {
+  // Header/title edits update only the document title, persisted in the content
+  // (content.label), never the node's file-name `label`.
+  const handleRenameDocTitle = (workspaceId: string, docId: string, title: string) => {
+    if (!title.trim()) return;
+    const trimmed = title.trim();
+    docCache.current[docId] = {
+      ...(docCache.current[docId] ?? { content: [], version: undefined }),
+      title: trimmed,
+    };
+    force();
+    scheduleSave(workspaceId, docId);
+  };
+
+  const handleDeleteNode = async (workspaceId: string, id: string) => {
     updateWorkspaceNodes(workspaceId, prev => removeKnowledgeNode(prev, id).tree);
+    try {
+      await api.workspaces.deleteNode(workspaceId, id);
+    } catch (err) {
+      console.error('Failed to delete node', err);
+      await refreshNodes(workspaceId);
+    }
   };
 
-  const handleMoveNode = (workspaceId: string, id: string, newParentId: string | null) => {
+  const handleMoveNode = async (
+    workspaceId: string,
+    id: string,
+    newParentId: string | null
+  ) => {
     updateWorkspaceNodes(workspaceId, prev => {
       // Prevent dropping a node into its own subtree.
       if (newParentId !== null && isKnowledgeDescendant(prev, id, newParentId)) return prev;
@@ -480,6 +624,12 @@ function AppContent() {
       if (!removed) return prev;
       return insertKnowledgeNode(tree, newParentId, removed);
     });
+    try {
+      await api.workspaces.moveNode(workspaceId, id, { new_parent_id: newParentId });
+    } catch (err) {
+      console.error('Failed to move node', err);
+      await refreshNodes(workspaceId);
+    }
   };
 
   const updateWorkspaceNodes = (
@@ -487,16 +637,31 @@ function AppContent() {
     updater: (nodes: KnowledgeNode[]) => KnowledgeNode[]
   ) => setWorkspaces(prev => prev.map(w => (w.id === wsId ? { ...w, nodes: updater(w.nodes) } : w)));
 
-  const handleCreateWorkspace = (label: string, icon: string) => {
-    setWorkspaces(prev => [...prev, { id: crypto.randomUUID(), label, icon, nodes: [] }]);
+  const handleCreateWorkspace = async (label: string, icon: string) => {
+    try {
+      const ws = await api.workspaces.create({ label, icon });
+      setWorkspaces(prev => [...prev, { ...ws, nodes: [] }]);
+    } catch (err) {
+      console.error('Failed to create workspace', err);
+    }
   };
 
-  const handleRenameWorkspace = (id: string, label: string, icon: string) => {
+  const handleRenameWorkspace = async (id: string, label: string, icon: string) => {
     setWorkspaces(prev => prev.map(w => (w.id === id ? { ...w, label, icon } : w)));
+    try {
+      await api.workspaces.update(id, { label, icon });
+    } catch (err) {
+      console.error('Failed to rename workspace', err);
+    }
   };
 
-  const handleDeleteWorkspace = (id: string) => {
+  const handleDeleteWorkspace = async (id: string) => {
     setWorkspaces(prev => prev.filter(w => w.id !== id));
+    try {
+      await api.workspaces.remove(id);
+    } catch (err) {
+      console.error('Failed to delete workspace', err);
+    }
   };
 
   // ── Document editing ─────────────────────────────────────────────────────────
@@ -542,27 +707,33 @@ function AppContent() {
   };
 
   const updateDocContent = (workspaceId: string, docId: string, content: DocBlock[]) => {
-    setWorkspaces(prev =>
-      prev.map(w =>
-        w.id === workspaceId
-          ? { ...w, nodes: setNodeContent(w.nodes, docId, content) }
-          : w,
-      ),
-    );
+    docCache.current[docId] = { ...(docCache.current[docId] ?? {}), content };
+    force();
+    setSaveStatus(s => ({ ...s, [docId]: 'saving' }));
+    scheduleSave(workspaceId, docId);
   };
 
-  const setNodeContent = (
-    nodes: KnowledgeNode[],
-    docId: string,
-    content: DocBlock[],
-  ): KnowledgeNode[] =>
-    nodes.map(n => {
-      if (n.id === docId) return { ...n, content };
-      if (n.children) return { ...n, children: setNodeContent(n.children, docId, content) };
-      return n;
-    });
+  // Lazy-load a document's body the first time it is opened.
+  useEffect(() => {
+    if (view === 'docs' && activeDocId) {
+      const doc = findDoc(activeDocId);
+      if (doc && !docCache.current[doc.node.id]) {
+        void loadDocContent(doc.workspaceId, doc.node.id);
+      }
+    }
+  }, [view, activeDocId, loadDocContent]);
+
+  // Flush any pending autosave when the tab is hidden.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flushSave();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [flushSave]);
 
   const handleSelectDoc = (docId: string) => {
+    flushSave();
     setActiveDocId(docId);
     setView(v => {
       if (v !== 'docs') prevViewRef.current = v;
@@ -741,21 +912,52 @@ function AppContent() {
       case 'docs': {
         const doc = activeDocId ? findDoc(activeDocId) : null;
         if (!doc) return <InboxPage />;
-        const blocks = doc.node.content && doc.node.content.length > 0
-          ? doc.node.content
+        const cached = docCache.current[doc.node.id];
+        if (!cached) {
+          return (
+            <div className="mx-auto w-full max-w-[760px] px-6 py-10 sm:px-12">
+              <Skeleton className="mb-2 h-9 w-2/3" />
+              <Skeleton className="mb-6 h-px w-full" />
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-11/12" />
+                <Skeleton className="h-4 w-4/5" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            </div>
+          );
+        }
+        const blocks = cached.content && cached.content.length > 0
+          ? cached.content
           : [{ id: crypto.randomUUID(), type: 'paragraph' as const, text: '' }];
         return (
           <DocsPage
-            key={doc.node.id}
+            key={`${doc.node.id}-${conflictBump}`}
             workspaceIcon={doc.workspaceIcon}
             workspaceLabel={doc.workspaceLabel}
             path={doc.path}
             docId={doc.node.id}
-            title={doc.node.label}
+            workspaceId={doc.workspaceId}
+            title={docCache.current[doc.node.id]?.title ?? doc.node.label}
             blocks={blocks}
-            onBack={() => setView(prevViewRef.current)}
-            onRename={label => handleRenameNode(doc.workspaceId, doc.node.id, label)}
+            versions={{
+              list: () => api.workspaces.listVersions(doc.workspaceId, doc.node.id),
+              get: (v) => api.workspaces.getVersion(doc.workspaceId, doc.node.id, v),
+              restore: async (v) => {
+                const res = await api.workspaces.restoreVersion(doc.workspaceId, doc.node.id, v);
+                await loadDocContent(doc.workspaceId, doc.node.id);
+                setConflictBump(b => b + 1);
+                return res.version;
+              },
+            }}
+            onBack={() => {
+              flushSave();
+              setView(prevViewRef.current);
+            }}
+            onRenameTitle={title => handleRenameDocTitle(doc.workspaceId, doc.node.id, title)}
             onUpdateContent={content => updateDocContent(doc.workspaceId, doc.node.id, content)}
+            saveStatus={saveStatus[doc.node.id]}
           />
         );
       }
@@ -778,6 +980,7 @@ function AppContent() {
         user={user}
         onLogout={handleLogout}
         workspaces={workspaces}
+        loadingWorkspaces={!workspacesLoaded}
         activeDocId={activeDocId}
         onSelectDoc={handleSelectDoc}
         onCreateWorkspace={handleCreateWorkspace}
@@ -804,6 +1007,7 @@ function AppContent() {
           {renderDashboardContent()}
         </main>
       </div>
+      <Toaster richColors position="top-right" />
     </div>
   );
 }

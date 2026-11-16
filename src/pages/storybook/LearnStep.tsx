@@ -10,14 +10,12 @@ import {
   ExternalLink,
   FileCode2,
   FileX2,
-  GitBranch,
   Layers,
   Loader2,
   Lock,
   Maximize,
   Minimize,
   Network,
-  Package,
   RefreshCw,
   Frame,
   Search,
@@ -62,7 +60,6 @@ import type {
   StorybookFlowStep,
   StorybookGraphNode,
   StorybookApiGroup,
-  StorybookCodebase,
   StorybookFileContentResponse,
 } from "@/types"
 
@@ -523,21 +520,6 @@ function SearchInput({
   )
 }
 
-function TabCard({ icon: Icon, title, hint }: { icon: LucideIcon; title: string; hint: string }) {
-  return (
-    <span className="flex w-full items-start gap-3">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
-        <Icon className="size-4" aria-hidden />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-sm font-medium leading-snug">{title}</span>
-        <span className="block text-xs font-normal text-muted-foreground group-data-[state=active]:text-foreground/80">
-          {hint}
-        </span>
-      </span>
-    </span>
-  )
-}
 
 const METHOD_STYLES: Record<string, string> = {
   GET: "border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
@@ -1806,51 +1788,54 @@ function ApisPanel({ apis }: { apis: StorybookApiGroup[] }) {
             aria-label="Endpoints"
             className="space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1"
           >
-            {groups.map(([group, list]) => (
-              <div key={group} className="space-y-1.5">
-                <div className="flex items-center gap-2 px-1">
-                  <Layers className="size-4 text-muted-foreground" aria-hidden />
-                  <p className="min-w-0 truncate text-sm font-semibold">{group}</p>
+            {groups.map(([group, list], i) => (
+              <Collapsible key={group} defaultOpen={i === 0} className="space-y-1.5">
+                <CollapsibleTrigger className="group flex w-full items-center gap-2 px-1 text-left outline-none">
+                  <Layers className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <p className="min-w-0 flex-1 truncate text-sm font-semibold">{group}</p>
                   <Badge variant="secondary">{list.length}</Badge>
-                </div>
-                <ul className="space-y-1">
-                  {list.map((it) => {
-                    const on = active?.id === it.id
-                    return (
-                      <li key={it.id}>
-                        <button
-                          type="button"
-                          aria-current={on}
-                          onClick={() => select(it.id)}
-                          className={cn(
-                            "flex w-full items-start gap-2 rounded-lg border px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-                            on ? "border-primary bg-primary/10" : "border-transparent hover:bg-accent/50"
-                          )}
-                        >
-                          <Badge
-                            variant="outline"
+                  <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-1">
+                  <ul className="space-y-1">
+                    {list.map((it) => {
+                      const on = active?.id === it.id
+                      return (
+                        <li key={it.id}>
+                          <button
+                            type="button"
+                            aria-current={on}
+                            onClick={() => select(it.id)}
                             className={cn(
-                              "mt-0.5 w-14 shrink-0 justify-center font-mono text-[10px] font-semibold",
-                              METHOD_STYLES[it.ep.method] ?? ""
+                              "flex w-full items-start gap-2 rounded-lg border px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                              on ? "border-primary bg-primary/10" : "border-transparent hover:bg-accent/50"
                             )}
                           >
-                            {it.ep.method}
-                          </Badge>
-                          <span className="min-w-0 flex-1">
-                            <code className="block truncate font-mono text-xs font-medium">{it.ep.path}</code>
-                            {it.ep.summary && (
-                              <span className="line-clamp-2 text-xs text-muted-foreground">{it.ep.summary}</span>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "mt-0.5 w-14 shrink-0 justify-center font-mono text-[10px] font-semibold",
+                                METHOD_STYLES[it.ep.method] ?? ""
+                              )}
+                            >
+                              {it.ep.method}
+                            </Badge>
+                            <span className="min-w-0 flex-1">
+                              <code className="block truncate font-mono text-xs font-medium">{it.ep.path}</code>
+                              {it.ep.summary && (
+                                <span className="line-clamp-2 text-xs text-muted-foreground">{it.ep.summary}</span>
+                              )}
+                            </span>
+                            {needsAuth(it.ep) && (
+                              <Lock className="mt-1 size-3 shrink-0 text-muted-foreground" aria-label="Needs auth" />
                             )}
-                          </span>
-                          {needsAuth(it.ep) && (
-                            <Lock className="mt-1 size-3 shrink-0 text-muted-foreground" aria-label="Needs auth" />
-                          )}
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </CollapsibleContent>
+              </Collapsible>
             ))}
           </nav>
 
@@ -1863,186 +1848,6 @@ function ApisPanel({ apis }: { apis: StorybookApiGroup[] }) {
   )
 }
 
-type CodeModule = StorybookCodebase["modules"][number]
-type CodeFile = CodeModule["files"][number]
-
-function CodebasePanel({ codebase }: { codebase: StorybookCodebase }) {
-  const [query, setQuery] = React.useState("")
-  const modules = codebase.modules ?? []
-  const dependencies = codebase.dependencies ?? []
-  const logic = codebase.business_logic ?? []
-  const q = query.trim().toLowerCase()
-
-  const filtered = React.useMemo(() => {
-    const out: Array<{ m: CodeModule; files: CodeFile[] }> = []
-    for (const m of modules) {
-      if (!q) {
-        out.push({ m, files: m.files ?? [] })
-        continue
-      }
-      const modHit = m.module.toLowerCase().includes(q) || (m.responsibility ?? "").toLowerCase().includes(q)
-      const files: CodeFile[] = []
-      for (const f of m.files ?? []) {
-        if (modHit || f.path.toLowerCase().includes(q)) {
-          files.push(f)
-          continue
-        }
-        const symbols = (f.symbols ?? []).filter((s) => s.name.toLowerCase().includes(q))
-        if (symbols.length > 0) files.push({ ...f, symbols })
-      }
-      if (modHit || files.length > 0) out.push({ m, files })
-    }
-    return out
-  }, [modules, q])
-
-  const hasAside = dependencies.length > 0 || logic.length > 0
-
-  if (modules.length === 0 && !hasAside) {
-    return (
-      <EmptyState
-        icon={FileCode2}
-        title="No code map yet"
-        hint="Regenerate this guide to get a map of modules, files and symbols."
-      />
-    )
-  }
-
-  return (
-    <div className={cn("grid items-start gap-6", hasAside && "lg:grid-cols-[minmax(0,1fr)_20rem]")}>
-      <section className="min-w-0 space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <SearchInput value={query} onChange={setQuery} placeholder="Search files and symbols" />
-          <p className="text-sm text-muted-foreground sm:ml-auto">
-            {plural(codebase.symbols_total ?? 0, "symbol")}, {plural(codebase.routes_total ?? 0, "route")}
-          </p>
-        </div>
-
-        {filtered.length === 0 ? (
-          <EmptyState icon={Search} title="Nothing matches" hint="Try a file name, module or symbol." />
-        ) : (
-          <div className="space-y-3">
-            {filtered.map(({ m, files }) => (
-              <Collapsible
-                key={`${m.module}-${q ? "q" : "all"}`}
-                defaultOpen={!!q || modules.length === 1}
-                className="overflow-hidden rounded-xl border border-border bg-card"
-              >
-                <CollapsibleTrigger className="group flex w-full items-start gap-3 px-4 py-3 text-left outline-none transition-colors hover:bg-accent/30 focus-visible:bg-accent/40">
-                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                    <Package className="size-4" aria-hidden />
-                  </span>
-                  <span className="min-w-0 flex-1 space-y-0.5">
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{m.module}</span>
-                      <Badge variant="secondary" className="text-[11px]">
-                        {plural(m.file_count, "file")}
-                      </Badge>
-                    </span>
-                    <span className="block text-sm text-muted-foreground">{m.responsibility}</span>
-                  </span>
-                  <ChevronDown className="mt-1.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                </CollapsibleTrigger>
-                <CollapsibleContent className="space-y-3 border-t border-border px-4 py-4">
-                  {(m.depends_on ?? []).length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs text-muted-foreground">Depends on</span>
-                      {m.depends_on.map((d) => (
-                        <Badge key={d} variant="outline" className="text-[11px]">
-                          {d}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  {files.map((f) => (
-                    <Collapsible
-                      key={`${f.path}-${q ? "q" : "all"}`}
-                      defaultOpen={!!q}
-                      className="overflow-hidden rounded-lg border border-border bg-muted/30"
-                    >
-                      <CollapsibleTrigger className="group flex w-full items-center gap-2 px-3 py-2 text-left outline-none transition-colors hover:bg-accent/40 focus-visible:bg-accent/50">
-                        <FileCode2 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                        <code className="min-w-0 flex-1 break-all font-mono text-xs font-medium">{f.path}</code>
-                        <Badge variant="outline" className="shrink-0 text-[11px]">
-                          {plural(f.symbol_count, "symbol")}
-                        </Badge>
-                        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                      </CollapsibleTrigger>
-                      {(f.symbols ?? []).length > 0 && (
-                        <CollapsibleContent className="border-t border-border">
-                          <ul className="divide-y divide-border">
-                            {f.symbols.map((s, si) => (
-                              <li
-                                key={`${s.name}-${si}`}
-                                className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-1.5 text-xs transition-colors hover:bg-muted/60"
-                              >
-                                <span className="font-medium text-foreground/90">{s.name}</span>
-                                <Badge variant="secondary" className="text-[10px]">
-                                  {s.kind}
-                                </Badge>
-                                <code className="min-w-0 break-all font-mono text-[11px] text-muted-foreground">
-                                  {s.signature}
-                                </code>
-                                <span className="ml-auto text-[11px] text-muted-foreground">line {s.line}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </CollapsibleContent>
-                      )}
-                    </Collapsible>
-                  ))}
-                </CollapsibleContent>
-              </Collapsible>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {hasAside && (
-        <aside className="min-w-0 space-y-4">
-          {dependencies.length > 0 && (
-            <AsidePanel icon={GitBranch} title="Dependencies" count={dependencies.length}>
-              <ul className="max-h-96 divide-y divide-border overflow-y-auto">
-                {dependencies.map((d, i) => (
-                  <li key={i} className="space-y-1.5 px-4 py-2.5">
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      <code className="break-all font-mono text-foreground/80">{d.from}</code>
-                      <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                      <code className="break-all font-mono text-foreground/80">{d.to}</code>
-                    </div>
-                    {d.kind && (
-                      <Badge variant="outline" className="text-[11px]">
-                        {d.kind}
-                      </Badge>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </AsidePanel>
-          )}
-          {logic.length > 0 && (
-            <AsidePanel icon={Sparkles} title="Business logic" count={logic.length}>
-              <ul className="max-h-96 divide-y divide-border overflow-y-auto">
-                {logic.map((b, i) => (
-                  <li key={i} className="space-y-1.5 px-4 py-3">
-                    <p className="text-sm font-medium">{b.topic}</p>
-                    <ul className="space-y-1">
-                      {(b.locations ?? []).map((l, li) => (
-                        <li key={li} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                          <FileCode2 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                          <code className="break-all font-mono text-foreground/80">{l}</code>
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
-            </AsidePanel>
-          )}
-        </aside>
-      )}
-    </div>
-  )
-}
 
 // ─── Top-level LearnStep ──────────────────────────────────────────────────────
 
@@ -2053,28 +1858,16 @@ type Props = {
   errors?: string[]
 }
 
-const EMPTY_CODEBASE = {
-  modules: [],
-  dependencies: [],
-  business_logic: [],
-  symbols_total: 0,
-  routes_total: 0,
-} as unknown as StorybookCodebase
-
 export function LearnStep({ section, onRegenerate, regenerating = false, errors = [] }: Props) {
   const apis = section?.apis ?? []
-  const codebase = section?.codebase ?? EMPTY_CODEBASE
-  const warnings = section?.warnings ?? []
-
-  const endpointCount = apis.reduce((n, g) => n + g.endpoints.length, 0)
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Understand the codebase</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">API Reference</h1>
           <p className="max-w-prose text-muted-foreground">
-            Explore the project&apos;s endpoints and browse the code that implements them.
+            Browse the project&apos;s HTTP endpoints, their parameters and how to call them.
           </p>
         </div>
         {onRegenerate && (
@@ -2098,55 +1891,7 @@ export function LearnStep({ section, onRegenerate, regenerating = false, errors 
         </Alert>
       )}
 
-      {warnings.length > 0 && (
-        <Collapsible
-          defaultOpen={warnings.length <= 3}
-          className="overflow-hidden rounded-xl border border-amber-400/60 bg-amber-50/60 dark:border-amber-500/40 dark:bg-amber-500/5"
-        >
-          <CollapsibleTrigger className="group flex w-full items-center gap-2 px-5 py-4 text-left outline-none">
-            <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-            <span className="font-medium">Warnings</span>
-            <Badge variant="outline" className="border-amber-400/60 text-amber-700 dark:text-amber-300">
-              {warnings.length}
-            </Badge>
-            <ChevronDown className="ml-auto size-4 shrink-0 text-amber-600 transition-transform duration-200 group-data-[state=open]:rotate-180 dark:text-amber-400" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="border-t border-amber-400/25">
-            <ul className="divide-y divide-amber-400/20 px-5">
-              {warnings.map((w, i) => (
-                <li key={i} className="flex items-start gap-2.5 py-3">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-400/25 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
-                    {i + 1}
-                  </span>
-                  <span className="text-sm text-amber-900/90 dark:text-amber-100/80">{w}</span>
-                </li>
-              ))}
-            </ul>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-
-      <Tabs defaultValue="apis" className="gap-6">
-        <TabsList className="grid h-auto w-full auto-rows-fr grid-cols-1 gap-3 bg-transparent p-0 sm:grid-cols-2">
-          <TabsTrigger value="apis" className={CARD_TRIGGER}>
-            <TabCard icon={Server} title="How do I interact?" hint={plural(endpointCount, "endpoint")} />
-          </TabsTrigger>
-          <TabsTrigger value="codebase" className={CARD_TRIGGER}>
-            <TabCard
-              icon={FileCode2}
-              title="Where is it implemented?"
-              hint={plural(codebase.symbols_total ?? 0, "symbol")}
-            />
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="apis">
-          <ApisPanel apis={apis} />
-        </TabsContent>
-        <TabsContent value="codebase">
-          <CodebasePanel codebase={codebase} />
-        </TabsContent>
-      </Tabs>
+      <ApisPanel apis={apis} />
     </div>
   )
 }

@@ -154,7 +154,7 @@ export function StorybookPage({ repoId: repoIdProp }: { repoId?: string | null }
   const steps: StorybookStep[] = [
     { id: 'set_up', title: 'Setup & Run', status: stepStatusFor(!!section) },
     { id: 'flows', title: 'Flows and Features', status: stepStatusFor(!!learn) },
-    { id: 'learn', title: 'Understand the codebase', status: stepStatusFor(!!learn) },
+    { id: 'learn', title: 'API Reference', status: stepStatusFor(!!learn) },
   ];
 
   return (

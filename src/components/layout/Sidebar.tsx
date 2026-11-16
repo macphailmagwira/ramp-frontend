@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { gradientFor, initialsOf } from '@/lib/avatar';
-import type { ViewState, Repository, User, DocBlock } from '@/types';
+import type { ViewState, Repository, User, DocBlock, WorkspaceRole } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import {
   Popover,
@@ -89,8 +90,13 @@ export interface KnowledgeNode {
   type: KnowledgeNodeType;
   label: string;
   children?: KnowledgeNode[];
-  /** Document body, present only on `file` nodes that have been opened/edited. */
+  /** Document body, present only on `file` nodes whose content has been loaded. */
   content?: DocBlock[];
+  // Server-owned metadata (optional on client-built nodes)
+  parent_id?: string | null;
+  version?: number;
+  updated_at?: string;
+  updated_by?: string;
 }
 
 export interface Workspace {
@@ -98,6 +104,11 @@ export interface Workspace {
   label: string;
   icon: string; // emoji
   nodes: KnowledgeNode[];
+  // Server-owned metadata (optional until hydrated from the API)
+  owner_id?: string;
+  role?: WorkspaceRole;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const WORKSPACE_ICONS = [
@@ -124,6 +135,7 @@ interface SidebarProps {
   user: User | null;
   onLogout?: () => void;
   workspaces?: Workspace[];
+  loadingWorkspaces?: boolean;
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
   onCreateWorkspace?: (label: string, icon: string) => void;
@@ -234,7 +246,7 @@ function SectionHeader({
     <button
       onClick={onToggle}
       className={cn(
-        'group flex h-6 w-full items-center gap-1 rounded px-2 text-xs font-medium text-foreground/40 hover:text-foreground/65',
+        'group flex h-6 w-full items-center gap-1 rounded px-2 text-xs font-medium text-foreground/55 hover:text-foreground/80',
         noFocusRing
       )}
     >
@@ -258,15 +270,17 @@ function NewItemInput({
   depth = 0,
   initialValue,
   className,
+  fill,
   onSubmit,
   onCancel,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; fill?: string }>;
   placeholder: string;
   indent?: boolean;
   depth?: number;
   initialValue?: string;
   className?: string;
+  fill?: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
 }) {
@@ -274,13 +288,14 @@ function NewItemInput({
 
   return (
     <div
-      style={depth > 0 ? { paddingLeft: 8 + depth * 22 } : indent ? { paddingLeft: 28 } : undefined}
+      style={depth > 0 ? { paddingLeft: 20 + depth * 26 } : indent ? { paddingLeft: 20 } : { paddingLeft: 20 }}
       className={cn(
         'flex h-[26px] items-center gap-1.5 rounded-md px-2',
         className
       )}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
+      <span className="h-2.5 w-2.5 shrink-0" />
+      <Icon fill={fill} className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
       <input
         autoFocus
         value={value}
@@ -554,12 +569,13 @@ function WorkspaceNodes({
           onDrop={e => onNodeDrop(e, node.id)}
         >
           {renamingId === node.id ? (
-            <NewItemInput
-              icon={Icon}
-              initialValue={node.label}
-              placeholder="Name"
-              depth={depth}
-              className="flex-1"
+              <NewItemInput
+                icon={Icon}
+                fill={isFolder ? 'currentColor' : undefined}
+                initialValue={node.label}
+                placeholder="Name"
+                depth={depth}
+                className="flex-1"
               onSubmit={label => {
                 onRenameNode?.(workspaceId, node.id, label);
                 setRenamingId(null);
@@ -569,7 +585,7 @@ function WorkspaceNodes({
           ) : (
             <button
               onClick={isFolder || hasChildren ? () => toggleNode(node.id) : () => onSelectDoc?.(node.id)}
-              style={{ paddingLeft: 8 + depth * 22 }}
+              style={{ paddingLeft: 20 + depth * 26 }}
               className={cn(
                 'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm transition-colors',
                 isFolder
@@ -580,15 +596,18 @@ function WorkspaceNodes({
                 noFocusRing
               )}
             >
-              {expandable && (
-                <ChevronRight
-                  className={cn('h-2.5 w-2.5 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
-                />
-              )}
+              <span className="flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+                {expandable && (
+                  <ChevronRight
+                    className={cn('h-2.5 w-2.5 text-foreground/40 transition-transform', open && 'rotate-90')}
+                  />
+                )}
+              </span>
               <Icon
+                fill={isFolder ? 'currentColor' : 'none'}
                 className={cn(
                   'h-3 w-3 shrink-0',
-                  isFolder ? 'text-foreground/55' : 'text-foreground/35'
+                  isFolder ? 'text-foreground/70' : 'text-foreground/35'
                 )}
               />
               <span className="flex-1 truncate text-left">{node.label}</span>
@@ -605,13 +624,14 @@ function WorkspaceNodes({
         </div>
         {expandable && open && (
           <div className="flex flex-col">
-            {(node.children ?? []).map(child => renderNode(child, depth + 1))}
+            {(node.children ?? []).map(child => renderNode(child, child.type === 'folder' ? depth + 1 : depth))}
             {creating?.parentId === node.id && (
               <NewItemInput
                 key="__new"
                 icon={creating.type === 'folder' ? Folder : File}
+                fill={creating.type === 'folder' ? 'currentColor' : undefined}
                 placeholder={creating.type === 'folder' ? 'New folder' : 'New file'}
-                depth={depth + 1}
+                depth={creating.type === 'folder' ? depth + 1 : depth}
                 onSubmit={label => submitCreate(node.id, creating.type, label)}
                 onCancel={() => onStartCreate(null, null)}
               />
@@ -635,6 +655,7 @@ function WorkspaceNodes({
         <NewItemInput
           key="__new-root"
           icon={creating.type === 'folder' ? Folder : File}
+          fill={creating.type === 'folder' ? 'currentColor' : undefined}
           placeholder={creating.type === 'folder' ? 'New folder' : 'New file'}
           onSubmit={label => submitCreate(null, creating.type, label)}
           onCancel={() => onStartCreate(null, null)}
@@ -648,6 +669,7 @@ function WorkspaceNodes({
 
 function WorkspaceSection({
   workspaces,
+  loadingWorkspaces,
   isOpen,
   sectionCollapsed,
   onToggleSection,
@@ -662,6 +684,7 @@ function WorkspaceSection({
   onMoveNode,
 }: {
   workspaces: Workspace[];
+  loadingWorkspaces?: boolean;
   isOpen: boolean;
   sectionCollapsed: boolean;
   onToggleSection: () => void;
@@ -694,22 +717,14 @@ function WorkspaceSection({
   return (
     <div className="flex flex-col gap-0.5">
       <div className="group flex h-6 w-full items-center gap-1 rounded">
-        <button
-          onClick={onToggleSection}
-          className={cn(
-            'flex h-6 flex-1 items-center gap-1 rounded px-2 text-xs font-medium text-foreground/40 hover:text-foreground/65',
-            noFocusRing
-          )}
-        >
-          <span>Workspace</span>
-          <ChevronRight
-            className={cn(
-              'h-3 w-3 shrink-0 opacity-0 transition-transform group-hover:opacity-100',
-              !sectionCollapsed && 'rotate-90'
-            )}
+        <div className="flex-1">
+          <SectionHeader
+            label="Workspace"
+            collapsed={sectionCollapsed}
+            onToggle={onToggleSection}
           />
-        </button>
-        <Tooltip>
+        </div>
+        <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
             <button
               onClick={() => {
@@ -732,7 +747,22 @@ function WorkspaceSection({
 
       {(!sectionCollapsed || !isOpen) && (
         <div className="flex flex-col gap-0.5">
-          {workspaces.map(ws => {
+          {loadingWorkspaces ? (
+            <>
+              {[0, 1, 2].map(i => (
+                <div key={i} className="flex h-[26px] items-center gap-2 rounded-md px-2">
+                  <Skeleton className="h-3 w-3 rounded-sm" />
+                  <Skeleton className="h-3 w-3 rounded-sm" />
+                  <Skeleton className="h-3 flex-1" />
+                </div>
+              ))}
+            </>
+          ) : workspaces.length === 0 ? (
+            <div className="flex h-[30px] items-center px-2 text-xs text-foreground/45">
+              No workspaces yet.
+            </div>
+          ) : (
+          workspaces.map(ws => {
             const open = openWs.has(ws.id);
             return (
               <div key={ws.id} className="flex flex-col">
@@ -741,8 +771,7 @@ function WorkspaceSection({
                     onClick={() => toggleWs(ws.id)}
                     style={{ paddingLeft: 8 }}
                     className={cn(
-                'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-[13px] transition-colors',
-                      open ? 'text-foreground/80' : 'text-foreground/70 hover:text-foreground/90',
+                'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm text-foreground/80 transition-colors',
                       noFocusRing
                     )}
                   >
@@ -789,7 +818,8 @@ function WorkspaceSection({
                 )}
               </div>
             );
-          })}
+          })
+          )}
         </div>
       )}
 
@@ -927,21 +957,9 @@ function AgentsSection({
     <div className="flex flex-col gap-0.5">
       {isOpen && (
         <div className="group flex h-6 w-full items-center gap-1 rounded">
-          <button
-            onClick={onToggleSection}
-            className={cn(
-              'flex h-6 flex-1 items-center gap-1 rounded px-2 text-xs font-medium text-foreground/40 hover:text-foreground/65',
-              noFocusRing
-            )}
-          >
-            <span>Agents</span>
-            <ChevronRight
-              className={cn(
-                'h-3 w-3 shrink-0 opacity-0 transition-transform group-hover:opacity-100',
-                !sectionCollapsed && 'rotate-90'
-              )}
-            />
-          </button>
+          <div className="flex-1">
+            <SectionHeader label="Agents" collapsed={sectionCollapsed} onToggle={onToggleSection} />
+          </div>
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
@@ -979,7 +997,7 @@ function AgentsSection({
           })}
 
           {agents.length === 0 && (
-            <div className="flex h-[30px] items-center px-2 text-sm text-foreground/45">
+            <div className="flex h-[30px] items-center px-2 text-xs text-foreground/45">
               No agents enabled yet.
             </div>
           )}
@@ -1325,6 +1343,7 @@ export function Sidebar({
   user,
   onLogout,
   workspaces = [],
+  loadingWorkspaces,
   activeDocId,
   onSelectDoc,
   onCreateWorkspace,
@@ -1457,6 +1476,7 @@ export function Sidebar({
             {/* Workspace */}
             <WorkspaceSection
               workspaces={workspaces}
+              loadingWorkspaces={loadingWorkspaces}
               isOpen={isOpen}
               sectionCollapsed={workspaceCollapsed}
               onToggleSection={() => setWorkspaceCollapsed(v => !v)}

@@ -557,3 +557,59 @@ export interface ArchitectureStoryResponse {
   root: ArchitectureStoryNode;
 }
 
+// ─── Workspace documents: backend API contracts ───────────────────────────────
+
+export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
+
+export interface WorkspaceMember {
+  user_id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  role: WorkspaceRole;
+  added_at: string;
+}
+
+/** Backend node shape — flat list with parent_id (client builds the tree). */
+export interface ApiKnowledgeNode {
+  id: string;
+  workspace_id: string;
+  parent_id: string | null;
+  type: 'folder' | 'file';
+  label: string;
+  version: number;
+  updated_at: string;
+  updated_by: string;
+}
+
+export interface ContentResponse {
+  id: string;
+  label: string;
+  blocks: DocBlock[];
+  version: number;
+  updated_at: string;
+}
+
+export interface PutContentRequest {
+  label?: string;
+  blocks: DocBlock[];
+  base_version?: number;
+}
+
+export interface VersionSummary {
+  version: number;
+  label: string;
+  block_count: number;
+  edited_by: string;
+  created_at: string;
+}
+
+export interface VersionDetail {
+  label: string;
+  blocks: DocBlock[];
+}
+
+export interface RestoreVersionResponse {
+  version: number;
+}
+

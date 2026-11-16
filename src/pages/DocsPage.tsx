@@ -1,15 +1,28 @@
 import { useEffect, useState } from 'react';
-import type { DocBlock } from '@/types';
+import type { DocBlock, VersionSummary, VersionDetail } from '@/types';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { ChevronRight, ArrowLeft, FileText, RectangleVertical, RectangleHorizontal } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ChevronRight, ArrowLeft, FileText, RectangleVertical, RectangleHorizontal, History, RotateCcw, Check, AlertCircle } from 'lucide-react';
 import { DocsEditor } from '@/components/docs/DocsEditor';
+import { Spinner } from '@/components/ui/spinner';
 
 type Orientation = 'portrait' | 'landscape';
 
 const ORIENTATION_KEY = 'ramp_doc_orientation';
+
+interface DocsPageVersions {
+  list: () => Promise<VersionSummary[]>;
+  get: (version: number) => Promise<VersionDetail>;
+  restore: (version: number) => Promise<number>;
+}
 
 interface DocsPageProps {
   workspaceIcon: string;
@@ -17,11 +30,15 @@ interface DocsPageProps {
   /** Ancestor folders plus the doc itself, in order. */
   path: { id: string; label: string }[];
   docId: string;
+  workspaceId: string;
   title: string;
   blocks: DocBlock[];
+  versions?: DocsPageVersions;
   onBack: () => void;
-  onRename: (label: string) => void;
+  onRenameTitle: (title: string) => void;
   onUpdateContent: (blocks: DocBlock[]) => void;
+  /** Save state for this document: shown as an unsaved/saved indicator. */
+  saveStatus?: 'saving' | 'saved' | 'error';
 }
 
 export function DocsPage({
@@ -30,9 +47,11 @@ export function DocsPage({
   path,
   title,
   blocks,
+  versions,
   onBack,
-  onRename,
+  onRenameTitle,
   onUpdateContent,
+  saveStatus,
 }: DocsPageProps) {
   const [titleDraft, setTitleDraft] = useState(title);
   const [orientation, setOrientation] = useState<Orientation>(() => {
@@ -53,12 +72,56 @@ export function DocsPage({
     }
   }, [orientation]);
 
+  // ── Version history ──
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [versionList, setVersionList] = useState<VersionSummary[] | null>(null);
+  const [versionLoading, setVersionLoading] = useState(false);
+  const [preview, setPreview] = useState<{ version: number; detail: VersionDetail } | null>(null);
+  const [restoring, setRestoring] = useState(false);
+
+  const openHistory = async () => {
+    setHistoryOpen(true);
+    if (!versions) return;
+    setVersionLoading(true);
+    try {
+      setVersionList(await versions.list());
+    } catch {
+      setVersionList([]);
+    } finally {
+      setVersionLoading(false);
+    }
+  };
+
+  const previewVersion = async (version: number) => {
+    if (!versions) return;
+    try {
+      setPreview({ version, detail: await versions.get(version) });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const restoreVersion = async (version: number) => {
+    if (!versions) return;
+    setRestoring(true);
+    try {
+      await versions.restore(version);
+      setHistoryOpen(false);
+      setPreview(null);
+    } catch {
+      /* ignore */
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   const commitTitle = (value: string) => {
     setTitleDraft(value);
-    onRename(value);
+    onRenameTitle(value);
   };
 
   return (
+    <>
     <div className="flex h-full flex-col bg-background">
       {/* Breadcrumb bar */}
       <header className="flex shrink-0 items-center gap-2 bg-card/30 px-4 py-2.5 backdrop-blur-sm">
@@ -121,6 +184,35 @@ export function DocsPage({
             <RectangleHorizontal className="h-3.5 w-3.5" />
           </button>
         </div>
+
+        {versions && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={openHistory}
+            className="h-7 gap-1.5 px-2 text-[12px] text-muted-foreground hover:text-foreground"
+          >
+            <History className="h-3.5 w-3.5" />
+            History
+          </Button>
+        )}
+
+        {saveStatus && (
+          <span
+            className={cn(
+              'flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium',
+              saveStatus === 'saving' && 'text-muted-foreground',
+              saveStatus === 'saved' && 'text-emerald-500',
+              saveStatus === 'error' && 'text-destructive',
+            )}
+            aria-live="polite"
+          >
+            {saveStatus === 'saving' && <Spinner className="h-3 w-3" />}
+            {saveStatus === 'saved' && <Check className="h-3 w-3" />}
+            {saveStatus === 'error' && <AlertCircle className="h-3 w-3" />}
+            {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Not saved'}
+          </span>
+        )}
       </header>
 
       {/* Document */}
@@ -154,5 +246,62 @@ export function DocsPage({
         </div>
       </ScrollArea>
     </div>
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Version history</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            {versionLoading && (
+              <p className="px-1 py-4 text-sm text-muted-foreground">Loading…</p>
+            )}
+            {!versionLoading && versionList && versionList.length === 0 && (
+              <p className="px-1 py-4 text-sm text-muted-foreground">No versions yet.</p>
+            )}
+            <div className="flex flex-col gap-1">
+              {versionList?.map((v) => (
+                <div key={v.version} className="rounded-md border border-border/60 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-medium">Version {v.version}</div>
+                      <div className="truncate text-[12px] text-muted-foreground">
+                        {v.label || 'Untitled'} · {v.edited_by} ·{' '}
+                        {new Date(v.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => previewVersion(v.version)}
+                      >
+                        Preview
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => restoreVersion(v.version)}
+                        disabled={restoring}
+                      >
+                        <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                        Restore
+                      </Button>
+                    </div>
+                  </div>
+                  {preview?.version === v.version && (
+                    <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted/50 p-2 text-[12px]">
+                      {preview.detail.blocks
+                        .map((b) => (b.type === 'divider' ? '—' : b.text))
+                        .join('\n')}
+                    </pre>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
