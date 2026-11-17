@@ -177,6 +177,10 @@ function AppContent() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
 
+  // Workspaces are shown as-is; no client-side filtering by repository.
+  const visibleWorkspaces = workspaces;
+
+
   // Loaded document bodies + their server version, keyed by node id.
   // `title` is the document header, persisted in the content (content.label),
   // independent of the node's file-name `label`.
@@ -488,6 +492,7 @@ function AppContent() {
       localStorage.setItem(connectedRepoKey(user?.id), response.id);
       setSelectedRepository(repo);
       await loadConnectedRepositories();
+      void fetchWorkspaces();
       setView('repository-analysis');
     } catch (err) {
       console.error('Failed to connect repository:', err);
@@ -499,6 +504,7 @@ function AppContent() {
     setConnectedRepoId(repo.id);
     localStorage.setItem(connectedRepoKey(user?.id), repo.id);
     setView('overview');
+    void fetchWorkspaces();
   };
 
   const handleAddRepository = () => {
@@ -1048,7 +1054,7 @@ function AppContent() {
         onAddRepository={handleAddRepository}
         user={user}
         onLogout={handleLogout}
-        workspaces={workspaces}
+        workspaces={visibleWorkspaces}
         loadingWorkspaces={!workspacesLoaded}
         activeDocId={activeDocId}
         onSelectDoc={handleSelectDoc}

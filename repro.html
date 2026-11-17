@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .ra-viewport { overflow: hidden; width: 224px; }
+  .ra-table { display: table; min-width: 100%; }
+  /* simulate controls visible as if hovered */
+  .show .ctrl { opacity: 1 !important; }
+</style>
+</head>
+<body class="bg-neutral-100 p-4">
+<h3 class="text-xs mb-2">Sidebar width context (w-60 = 240px, nav px-2 -> 224px content)</h3>
+<div class="bg-white" style="width:240px;">
+  <div class="ra-viewport" style="overflow:hidden;">
+    <div class="ra-table">
+      <nav class="px-2 py-3 flex flex-col gap-4">
+        <!-- Workspace section header -->
+        <div class="flex flex-col gap-0.5">
+          <div class="group flex h-6 w-full items-center gap-1 rounded">
+            <div class="flex-1"><div class="flex h-6 w-full items-center gap-1 rounded px-2 text-xs font-medium text-foreground/55">Workspace</div></div>
+            <button class="mr-1 flex h-5 w-5 items-center justify-center rounded">+</button>
+          </div>
+
+          <!-- Workspace header row with long name + alwaysShow controls -->
+          <div class="flex flex-col show">
+            <div class="group flex h-[26px] w-full items-center gap-1.5 rounded-md pr-1">
+              <button class="flex h-full min-w-0 flex-1 items-center gap-1.5 text-sm">
+                <span class="h-3 w-3 shrink-0">▶</span>
+                <span class="text-sm leading-none">📘</span>
+                <span class="min-w-0 flex-1 truncate text-left">A very long workspace name that should truncate</span>
+              </button>
+              <button class="ctrl flex h-5 w-5 shrink-0 items-center justify-center rounded">⋯</button>
+              <button class="ctrl flex h-5 w-5 shrink-0 items-center justify-center rounded">+</button>
+            </div>
+
+            <!-- Folder node row, long name, hover controls -->
+            <div class="group/node flex h-[22px] w-full items-center gap-1.5 rounded-md pr-1">
+              <button class="flex h-full min-w-0 flex-1 items-center gap-1.5 text-sm" style="padding-left:20px">
+                <span class="flex h-2.5 w-2.5 shrink-0 items-center justify-center">▶</span>
+                <span class="h-3 w-3 shrink-0">📁</span>
+                <span class="flex-1 min-w-0 truncate text-left">A very long folder name that keeps going and going forever</span>
+              </button>
+              <button class="ctrl flex h-5 w-5 shrink-0 items-center justify-center rounded">+</button>
+              <button class="ctrl flex h-5 w-5 shrink-0 items-center justify-center rounded">⋯</button>
+            </div>
+
+            <!-- Deeply nested file node -->
+            <div class="group/node flex h-[22px] w-full items-center gap-1.5 rounded-md pr-1">
+              <button class="flex h-full min-w-0 flex-1 items-center gap-1.5 text-sm" style="padding-left:98px">
+                <span class="flex h-2.5 w-2.5 shrink-0 items-center justify-center"></span>
+                <span class="h-3 w-3 shrink-0">📄</span>
+                <span class="flex-1 min-w-0 truncate text-left">deeply nested file with an extremely long name indeed</span>
+              </button>
+              <button class="ctrl flex h-5 w-5 shrink-0 items-center justify-center rounded">⋯</button>
+            </div>
+          </div>
+        </div>
+      </nav>
+    </div>
+  </div>
+</div>
+</body>
+</html>

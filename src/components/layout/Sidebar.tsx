@@ -214,7 +214,7 @@ function Row({
       <Icon className="h-[15px] w-[15px] shrink-0 text-foreground/55 group-hover:text-foreground/70" />
       {isOpen && (
         <>
-          <span className="flex-1 truncate text-left">{label}</span>
+          <span className="flex-1 min-w-0 truncate text-left">{label}</span>
           {badge && (
             <span className="rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[11px] text-foreground/50">
               {badge}
@@ -302,7 +302,7 @@ function NewItemInput({
       )}
     >
       <span className="h-2.5 w-2.5 shrink-0" />
-      <Icon fill={fill} className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
+      <Icon fill={fill} className="h-3 w-3 shrink-0 text-foreground/35" />
       <input
         autoFocus
         value={value}
@@ -333,9 +333,11 @@ function NewItemInput({
 function KnowledgeAddControl({
   onPick,
   revealOn = 'node',
+  alwaysShow = false,
 }: {
   onPick: (type: KnowledgeNodeType) => void;
   revealOn?: 'group' | 'node';
+  alwaysShow?: boolean;
 }) {
   const reveal = revealOn === 'node' ? 'group-hover/node:opacity-100' : 'group-hover:opacity-100';
   const [hovered, setHovered] = useState(false);
@@ -365,13 +367,14 @@ function KnowledgeAddControl({
     <>
       <div
         className={cn(
-          'flex shrink-0 items-center opacity-0 transition-opacity duration-200',
-          reveal
+          'flex shrink-0 items-center transition-opacity duration-200',
+          alwaysShow ? 'opacity-100' : cn('opacity-0', reveal)
         )}
       >
         <button
           ref={triggerRef}
           aria-label="Add"
+          onClick={open}
           onMouseEnter={open}
           onMouseLeave={scheduleClose}
           className={cn(
@@ -390,10 +393,10 @@ function KnowledgeAddControl({
             onMouseEnter={open}
             onMouseLeave={scheduleClose}
           >
-            <button onClick={() => onPick('folder')} className={cn(menuItemCls, noFocusRing)}>
+            <button onClick={() => { setHovered(false); onPick('folder'); }} className={cn(menuItemCls, noFocusRing)}>
               Create new folder
             </button>
-            <button onClick={() => onPick('file')} className={cn(menuItemCls, noFocusRing)}>
+            <button onClick={() => { setHovered(false); onPick('file'); }} className={cn(menuItemCls, noFocusRing)}>
               Create new file
             </button>
           </div>,
@@ -413,6 +416,7 @@ function KnowledgeOptionsControl({
   onDelete,
   onToggleShare,
   reveal = 'group-hover/node:opacity-100',
+  alwaysShow = false,
 }: {
   node: KnowledgeNode;
   /** False for shared nodes viewed outside their owning workspace. */
@@ -421,6 +425,7 @@ function KnowledgeOptionsControl({
   onDelete: (id: string) => void;
   onToggleShare?: (id: string, shared: boolean) => void;
   reveal?: string;
+  alwaysShow?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -442,8 +447,8 @@ function KnowledgeOptionsControl({
         aria-label="Options"
         onClick={toggle}
         className={cn(
-          'flex h-5 w-5 shrink-0 items-center justify-center rounded text-foreground/45 opacity-0 transition-opacity hover:bg-foreground/[0.07] hover:text-foreground',
-          reveal,
+          'flex h-5 w-5 shrink-0 items-center justify-center rounded text-foreground/45 transition-opacity hover:bg-foreground/[0.07] hover:text-foreground',
+          alwaysShow ? 'opacity-100' : cn('opacity-0', reveal),
           noFocusRing
         )}
       >
@@ -495,6 +500,58 @@ function KnowledgeOptionsControl({
           document.body
         )}
     </>
+  );
+}
+
+// ─── Truncated name with "show full name" tooltip ────────────────────────────
+// Caps the displayed label at `maxChars` (adding an ellipsis) and shows a
+// tooltip ABOVE the row with the full name whenever the name is shortened —
+// either by the character cap or by CSS clipping in a narrow row.
+
+const NAME_MAX_CHARS = 24;
+
+/** Depth-aware cap for tree rows: nested rows have less horizontal room. */
+const nodeMaxChars = (depth: number) => Math.max(10, 18 - depth * 4);
+
+function TruncatedName({
+  label,
+  maxChars = NAME_MAX_CHARS,
+  className,
+}: {
+  label: string;
+  maxChars?: number;
+  className?: string;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+
+  const capped = label.length > maxChars;
+  const display = capped ? `${label.slice(0, maxChars).trimEnd()}…` : label;
+
+  // Tooltip only opens when the name is actually shortened, either by the
+  // character cap or by CSS clipping in a narrow row.
+  const isShortened = () =>
+    capped || (!!ref.current && ref.current.scrollWidth > ref.current.clientWidth);
+
+  return (
+    <Tooltip
+      delayDuration={0}
+      open={open}
+      onOpenChange={o => setOpen(o && isShortened())}
+    >
+      <TooltipTrigger asChild>
+        <span ref={ref} className={cn('min-w-0 flex-1 truncate text-left', className)}>
+          {display}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        sideOffset={4}
+        className="max-w-[260px] break-all border border-neutral-200 bg-white text-neutral-900 shadow-md [&_svg]:fill-white"
+      >
+        {label}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -592,7 +649,12 @@ function WorkspaceNodes({
       <div key={node.id} className="flex flex-col">
         <div
           className={cn(
-            'group/node flex h-[22px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]',
+            // Buttons are in normal flow (not absolute) so the name button
+            // only receives the space left over after them.
+            // The highlight lives on the row (not the name button) so hover and
+            // selected share the same color and span the full row width.
+            'group/node flex h-[22px] w-full min-w-0 items-center gap-1 rounded-md pr-1 transition-colors hover:bg-foreground/[0.06]',
+            active && 'bg-foreground/[0.06]',
             dragOverId === node.id && 'bg-foreground/[0.06] ring-1 ring-foreground/30'
           )}
           draggable={editable && !!onMoveNode}
@@ -602,13 +664,13 @@ function WorkspaceNodes({
           onDrop={editable ? e => onNodeDrop(e, node.id) : undefined}
         >
           {renamingId === node.id ? (
-              <NewItemInput
-                icon={Icon}
-                fill={isFolder ? 'currentColor' : undefined}
-                initialValue={node.label}
-                placeholder="Name"
-                depth={depth}
-                className="flex-1"
+            <NewItemInput
+              icon={Icon}
+              fill="none"
+              initialValue={node.label}
+              placeholder="Name"
+              depth={depth}
+              className="flex-1"
               onSubmit={label => {
                 onRenameNode?.(workspaceId, node.id, label);
                 setRenamingId(null);
@@ -620,11 +682,11 @@ function WorkspaceNodes({
               onClick={isFolder || hasChildren ? () => toggleNode(node.id) : () => onSelectDoc?.(node.id)}
               style={{ paddingLeft: 20 + depth * 26 }}
               className={cn(
-                'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm transition-colors',
+                'flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md text-sm transition-colors',
                 isFolder
                   ? 'text-foreground/60 hover:text-foreground/80'
                   : active
-                    ? 'bg-foreground/[0.06] font-medium text-foreground'
+                    ? 'font-medium text-foreground'
                     : 'text-foreground/90 hover:text-foreground',
                 noFocusRing
               )}
@@ -637,37 +699,39 @@ function WorkspaceNodes({
                 )}
               </span>
               <Icon
-                fill={isFolder ? 'currentColor' : 'none'}
+                fill="none"
                 className={cn(
                   'h-3 w-3 shrink-0',
                   isFolder ? 'text-foreground/40 dark:text-foreground/70' : 'text-foreground/35'
                 )}
               />
-              <span className="flex-1 min-w-0 truncate text-left">{node.label}</span>
+              <TruncatedName label={node.label} maxChars={nodeMaxChars(depth)} />
               {node.shared && (
-                <Tooltip delayDuration={0}>
-                  <TooltipTrigger asChild>
-                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-foreground/35">
-                      <Users className="h-3 w-3" />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    Shared {editable ? '(owned by this workspace)' : 'from another workspace — read-only'}
-                  </TooltipContent>
-                </Tooltip>
+                <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-foreground/35">
+                  <Users className="h-3 w-3" />
+                </span>
               )}
             </button>
           )}
-          {isFolder && editable && onCreateNode && <KnowledgeAddControl onPick={type => onStartCreate(node.id, type)} />}
-          {(editable && (onRenameNode || onDeleteNode || onToggleShare)) && (
-            <KnowledgeOptionsControl
-              node={node}
-              editable={editable}
-              onRename={id => setRenamingId(id)}
-              onDelete={id => onDeleteNode?.(workspaceId, id)}
-              onToggleShare={onToggleShare}
-            />
-          )}
+          <div className="flex shrink-0 items-center gap-1">
+            {isFolder && editable && onCreateNode && (
+              <KnowledgeAddControl
+                onPick={type => {
+                  setOpenNodes(prev => new Set(prev).add(node.id));
+                  onStartCreate(node.id, type);
+                }}
+              />
+            )}
+            {(editable && (onRenameNode || onDeleteNode || onToggleShare)) && (
+              <KnowledgeOptionsControl
+                node={node}
+                editable={editable}
+                onRename={id => setRenamingId(id)}
+                onDelete={id => onDeleteNode?.(workspaceId, id)}
+                onToggleShare={onToggleShare}
+              />
+            )}
+          </div>
         </div>
         {expandable && open && (
           <div className="flex flex-col">
@@ -676,7 +740,7 @@ function WorkspaceNodes({
               <NewItemInput
                 key="__new"
                 icon={creating.type === 'folder' ? Folder : File}
-                fill={creating.type === 'folder' ? 'currentColor' : undefined}
+                fill="none"
                 placeholder={creating.type === 'folder' ? 'New folder' : 'New file'}
                 depth={creating.type === 'folder' ? depth + 1 : depth}
                 onSubmit={label => submitCreate(node.id, creating.type, label)}
@@ -689,9 +753,9 @@ function WorkspaceNodes({
     );
   };
 
-  // Shared nodes are aggregated into a single global "Shared" section in
-  // WorkspaceSection, so they're excluded from each workspace's local tree.
-  const localNodes = nodes.filter(n => !n.shared);
+  // Shared nodes remain in their original workspace tree AND appear in the
+  // global "Shared" section, so show every node here (don't exclude shared).
+  const localNodes = nodes;
 
   return (
     <div
@@ -727,6 +791,7 @@ function WorkspaceSection({
   activeDocId,
   onSelectDoc,
   repositories = [],
+  repository = null,
   onCreateWorkspace,
   onRenameWorkspace,
   onDeleteWorkspace,
@@ -744,6 +809,7 @@ function WorkspaceSection({
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
   repositories?: Repository[];
+  repository?: Repository | null;
   onCreateWorkspace?: (label: string, icon: string, repo?: string | null) => void;
   onRenameWorkspace?: (id: string, label: string, icon: string, repo?: string | null) => void;
   onDeleteWorkspace?: (id: string) => void;
@@ -757,9 +823,6 @@ function WorkspaceSection({
   const [creating, setCreating] = useState<{ workspaceId: string; parentId: string | null; type: KnowledgeNodeType } | null>(null);
   const [editing, setEditing] = useState<Workspace | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [sharedOpen, setSharedOpen] = useState(true);
-  const [sharedOpenNodes, setSharedOpenNodes] = useState<Set<string>>(() => new Set());
-  const [sharedRenaming, setSharedRenaming] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -770,114 +833,6 @@ function WorkspaceSection({
       else next.add(id);
       return next;
     });
-  };
-
-  const sharedNodes = workspaces.flatMap(ws =>
-    ws.nodes.filter(n => n.shared).map(n => ({ ...n, workspace_id: ws.id }))
-  );
-
-  const handleToggleShared = (id: string, shared: boolean) => {
-    const node = sharedNodes.find(n => n.id === id);
-    if (node) onToggleShare?.(node.workspace_id, id, shared);
-  };
-
-  const toggleSharedOpen = (id: string) => {
-    setSharedOpenNodes(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const renderSharedNode = (node: KnowledgeNode & { workspace_id: string }, depth: number) => {
-    const open = sharedOpenNodes.has(node.id);
-    const renaming = sharedRenaming === node.id;
-    const children = node.children ?? [];
-    const hasChildren = children.length > 0;
-    if (renaming) {
-      return (
-        <div
-          key={node.id}
-          style={{ paddingLeft: 10 + depth * 12 }}
-          className="mb-0.5 flex h-[26px] items-center rounded-md bg-foreground/[0.05]"
-        >
-          <input
-            autoFocus
-            defaultValue={node.label}
-            className={cn(
-              'h-5 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-foreground/35',
-              noFocusRing
-            )}
-            onBlur={(e) => {
-              const v = e.target.value.trim();
-              if (v && v !== node.label) onRenameNode?.(node.workspace_id, node.id, v);
-              setSharedRenaming(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-              else if (e.key === 'Escape') setSharedRenaming(null);
-            }}
-          />
-        </div>
-      );
-    }
-    return (
-      <div
-        key={node.id}
-        className={cn(
-          'group flex h-[26px] min-w-0 items-center gap-1 rounded-md pr-1 transition-colors',
-          'hover:bg-foreground/[0.045]'
-        )}
-        style={{ paddingLeft: 10 + depth * 12 }}
-      >
-        {hasChildren ? (
-          <button
-            onClick={() => toggleSharedOpen(node.id)}
-            style={{ paddingLeft: 4 }}
-            className={cn(
-              'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm text-foreground/85',
-              noFocusRing
-            )}
-          >
-            <ChevronRight
-              className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
-            />
-            {node.type === 'folder' ? (
-              <Folder className="h-3.5 w-3.5 shrink-0 text-sky-400/80" />
-            ) : (
-              <FileText className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
-            )}
-            <span className="flex-1 min-w-0 truncate text-left">{node.label}</span>
-          </button>
-        ) : (
-          <button
-            onClick={() => onSelectDoc?.(node.id)}
-            style={{ paddingLeft: 16 }}
-            className={cn(
-              'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm text-foreground/85',
-              activeDocId === node.id && 'bg-foreground/[0.07] text-foreground',
-              noFocusRing
-            )}
-          >
-            {node.type === 'folder' ? (
-              <Folder className="h-3.5 w-3.5 shrink-0 text-sky-400/80" />
-            ) : (
-              <FileText className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
-            )}
-            <span className="flex-1 min-w-0 truncate text-left">{node.label}</span>
-          </button>
-        )}
-        <KnowledgeOptionsControl
-          node={node}
-          editable={false}
-          reveal="group-hover:opacity-100"
-          onRename={(id) => setSharedRenaming(id)}
-          onDelete={(id) => onDeleteNode?.(node.workspace_id, id)}
-          onToggleShare={onToggleShare ? (id, shared) => handleToggleShared(id, shared) : undefined}
-        />
-      </div>
-    );
   };
 
   return (
@@ -928,96 +883,71 @@ function WorkspaceSection({
               No workspaces yet.
             </div>
           ) : (
-          workspaces.map(ws => {
-            const open = openWs.has(ws.id);
-            const handleToggleShare = onToggleShare
-              ? (id: string, shared: boolean) => onToggleShare(ws.id, id, shared)
-              : undefined;
-            return (
-              <div key={ws.id} className="flex flex-col">
-                <div className="group flex h-[26px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]">
-                  <button
-                    onClick={() => toggleWs(ws.id)}
-                    style={{ paddingLeft: 8 }}
-                    className={cn(
-                'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm text-foreground/80 transition-colors',
-                      noFocusRing
-                    )}
-                  >
-                    <ChevronRight
-                      className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
+            workspaces.map(ws => {
+              const open = openWs.has(ws.id);
+              const handleToggleShare = onToggleShare
+                ? (id: string, shared: boolean) => onToggleShare(ws.id, id, shared)
+                : undefined;
+              return (
+                <div key={ws.id} className="flex flex-col">
+                  <div className="group flex h-[26px] w-full min-w-0 items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.06]">
+                    <button
+                      onClick={() => toggleWs(ws.id)}
+                      style={{ paddingLeft: 8 }}
+                      className={cn(
+                        'flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md text-sm text-foreground/80 transition-colors',
+                        noFocusRing
+                      )}
+                    >
+                      <ChevronRight
+                        className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
+                      />
+                      <span className="shrink-0 text-sm leading-none">{ws.icon}</span>
+                      <TruncatedName label={ws.label} maxChars={20} />
+                    </button>
+                    <KnowledgeOptionsControl
+                      node={{ id: ws.id, type: 'folder', label: ws.label }}
+                      editable
+                      alwaysShow
+                      reveal="group-hover:opacity-100"
+                      onRename={id => {
+                        const w = workspaces.find(x => x.id === id);
+                        setEditing(w ?? null);
+                        setModalOpen(true);
+                      }}
+                      onDelete={id => onDeleteWorkspace?.(id)}
                     />
-                    <span className="text-sm leading-none">{ws.icon}</span>
-                    <span className="flex-1 truncate text-left">{ws.label}</span>
-                  </button>
-                  <KnowledgeOptionsControl
-                    node={{ id: ws.id, type: 'folder', label: ws.label }}
-                    editable
-                    reveal="group-hover:opacity-100"
-                    onRename={id => {
-                      const w = workspaces.find(x => x.id === id);
-                      setEditing(w ?? null);
-                      setModalOpen(true);
-                    }}
-                    onDelete={id => onDeleteWorkspace?.(id)}
-                  />
-                  <KnowledgeAddControl
-                    revealOn="group"
-                    onPick={type => {
-                      setOpenWs(prev => new Set(prev).add(ws.id));
-                      setCreating({ workspaceId: ws.id, parentId: null, type });
-                    }}
-                  />
-                </div>
-                {open && (
-                  <WorkspaceNodes
-                    workspaceId={ws.id}
-                    nodes={ws.nodes}
-                    isOpen={isOpen}
-                    activeDocId={activeDocId}
-                    onSelectDoc={onSelectDoc}
-                    creating={creating?.workspaceId === ws.id ? { parentId: creating.parentId, type: creating.type } : null}
-                    onStartCreate={(parentId, type) =>
-                      setCreating(parentId === null || type === null ? null : { workspaceId: ws.id, parentId, type })
-                    }
-                    onCreateNode={onCreateNode}
-                    onRenameNode={onRenameNode}
-                    onDeleteNode={onDeleteNode}
-                    onMoveNode={onMoveNode}
-                    onToggleShare={handleToggleShare}
-                  />
-                )}
-              </div>
-            );
-          })
-          )}
-
-          <div className="mt-4 flex flex-col gap-0.5 border-t border-border/40 pt-3">
-            <button
-              onClick={() => setSharedOpen(v => !v)}
-              className={cn(
-                'flex h-[26px] w-full items-center gap-1.5 rounded-md px-2 text-sm text-foreground/70 transition-colors hover:bg-foreground/[0.045]',
-                noFocusRing
-              )}
-            >
-              <ChevronRight
-                className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', sharedOpen && 'rotate-90')}
-              />
-              <Users className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
-              <span className="flex-1 truncate text-left">Shared</span>
-            </button>
-              {sharedOpen && (
-          <div className="flex flex-col gap-0.5">
-                {sharedNodes.length === 0 ? (
-                  <div className="flex h-[28px] items-center px-6 text-xs text-foreground/40">
-                    No shared docs yet.
+                    <KnowledgeAddControl
+                      alwaysShow
+                      revealOn="group"
+                      onPick={type => {
+                        setOpenWs(prev => new Set(prev).add(ws.id));
+                        setCreating({ workspaceId: ws.id, parentId: null, type });
+                      }}
+                    />
                   </div>
-                ) : (
-                  sharedNodes.map(n => renderSharedNode(n, 0))
-                )}
-              </div>
-            )}
-          </div>
+                  {open && (
+                    <WorkspaceNodes
+                      workspaceId={ws.id}
+                      nodes={ws.nodes}
+                      isOpen={isOpen}
+                      activeDocId={activeDocId}
+                      onSelectDoc={onSelectDoc}
+                      creating={creating?.workspaceId === ws.id ? { parentId: creating.parentId, type: creating.type } : null}
+                      onStartCreate={(parentId, type) =>
+                        setCreating(parentId === null || type === null ? null : { workspaceId: ws.id, parentId, type })
+                      }
+                      onCreateNode={onCreateNode}
+                      onRenameNode={onRenameNode}
+                      onDeleteNode={onDeleteNode}
+                      onMoveNode={onMoveNode}
+                      onToggleShare={handleToggleShare}
+                    />
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 
@@ -1026,6 +956,7 @@ function WorkspaceSection({
         open={modalOpen}
         editing={editing}
         repositories={repositories}
+        defaultRepo={repository?.fullName ?? undefined}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
@@ -1041,24 +972,192 @@ function WorkspaceSection({
   );
 }
 
+// ─── Shared section — a footer rendered outside the scroll area so it stays ────
+// visible regardless of how many workspaces are expanded. ────────────────────────
+
+function SharedSection({
+  workspaces,
+  activeDocId,
+  onSelectDoc,
+  onRenameNode,
+  onDeleteNode,
+  onToggleShare,
+}: {
+  workspaces: Workspace[];
+  activeDocId?: string;
+  onSelectDoc?: (docId: string) => void;
+  onRenameNode?: (workspaceId: string, id: string, label: string) => void;
+  onDeleteNode?: (workspaceId: string, id: string) => void;
+  onToggleShare?: (workspaceId: string, id: string, shared: boolean) => void;
+}) {
+  const [sharedOpen, setSharedOpen] = useState(true);
+  const [sharedOpenNodes, setSharedOpenNodes] = useState<Set<string>>(() => new Set());
+  const [sharedRenaming, setSharedRenaming] = useState<string | null>(null);
+
+  const sharedNodes = workspaces.flatMap(ws =>
+    ws.nodes.filter(n => n.shared).map(n => ({ ...n, workspace_id: ws.id }))
+  );
+
+  const handleToggleShared = (id: string, shared: boolean) => {
+    const node = sharedNodes.find(n => n.id === id);
+    if (node) onToggleShare?.(node.workspace_id, id, shared);
+  };
+
+  const toggleSharedOpen = (id: string) => {
+    setSharedOpenNodes(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const renderSharedNode = (node: KnowledgeNode & { workspace_id: string }, depth: number) => {
+    const open = sharedOpenNodes.has(node.id);
+    const renaming = sharedRenaming === node.id;
+    const children = node.children ?? [];
+    const hasChildren = children.length > 0;
+    if (renaming) {
+      return (
+        <div
+          key={node.id}
+          style={{ paddingLeft: 10 + depth * 12 }}
+          className="mb-0.5 flex h-[26px] items-center rounded-md bg-foreground/[0.06]"
+        >
+          <input
+            autoFocus
+            defaultValue={node.label}
+            className={cn(
+              'h-5 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-foreground/35',
+              noFocusRing
+            )}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v && v !== node.label) onRenameNode?.(node.workspace_id, node.id, v);
+              setSharedRenaming(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              else if (e.key === 'Escape') setSharedRenaming(null);
+            }}
+          />
+        </div>
+      );
+    }
+    return (
+      <div
+        key={node.id}
+        className={cn(
+          'group flex h-[26px] min-w-0 items-center gap-1 rounded-md pr-1 transition-colors',
+          'hover:bg-foreground/[0.06]',
+          activeDocId === node.id && 'bg-foreground/[0.06]'
+        )}
+        style={{ paddingLeft: 10 + depth * 12 }}
+      >
+        {hasChildren ? (
+          <button
+            onClick={() => toggleSharedOpen(node.id)}
+            style={{ paddingLeft: 4 }}
+            className={cn(
+              'flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md text-sm text-foreground/85',
+              noFocusRing
+            )}
+          >
+            <ChevronRight
+              className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
+            />
+            {node.type === 'folder' ? (
+              <Folder className="h-3.5 w-3.5 shrink-0 text-sky-400/80" />
+            ) : (
+              <FileText className="h-3.5 w-3.5 shrink-0 text-foreground/35" />
+            )}
+            <TruncatedName label={node.label} maxChars={nodeMaxChars(depth)} />
+          </button>
+        ) : (
+          <button
+            onClick={() => onSelectDoc?.(node.id)}
+            style={{ paddingLeft: 16 }}
+            className={cn(
+              'flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md text-sm text-foreground/85',
+              activeDocId === node.id && 'text-foreground',
+              noFocusRing
+            )}
+          >
+            {node.type === 'folder' ? (
+              <Folder className="h-3.5 w-3.5 shrink-0 text-sky-400/80" />
+            ) : (
+              <FileText className="h-3.5 w-3.5 shrink-0 text-foreground/35" />
+            )}
+            <TruncatedName label={node.label} maxChars={nodeMaxChars(depth)} />
+          </button>
+        )}
+        <KnowledgeOptionsControl
+          node={node}
+          editable={false}
+          reveal="group-hover:opacity-100"
+          onRename={(id) => setSharedRenaming(id)}
+          onDelete={(id) => onDeleteNode?.(node.workspace_id, id)}
+          onToggleShare={onToggleShare ? (id, shared) => handleToggleShared(id, shared) : undefined}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex shrink-0 flex-col gap-0.5 border-t border-border/40 px-2 py-3">
+      <button
+        onClick={() => setSharedOpen(v => !v)}
+        className={cn(
+          'flex h-[26px] w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-sm text-foreground/70 transition-colors hover:bg-foreground/[0.06]',
+          noFocusRing
+        )}
+      >
+        <ChevronRight
+          className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', sharedOpen && 'rotate-90')}
+        />
+        <Users className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
+        <span className="min-w-0 flex-1 truncate text-left">Shared</span>
+        {sharedNodes.length > 0 && (
+          <span className="ml-auto shrink-0 truncate rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[11px] text-foreground/50">
+            {sharedNodes.length}
+          </span>
+        )}
+      </button>
+      {sharedOpen && (
+        <div className="flex flex-col gap-0.5">
+          {sharedNodes.length === 0 ? (
+            <div className="flex h-[28px] items-center px-6 text-xs text-foreground/40">
+              No shared docs yet.
+            </div>
+          ) : (
+            sharedNodes.map(n => renderSharedNode(n, 0))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Workspace create/rename modal — centered, Notion-style icon + name ────────
 
 function WorkspaceModal({
   open,
   editing,
   repositories = [],
+  defaultRepo,
   onClose,
   onSubmit,
 }: {
   open: boolean;
   editing?: Workspace | null;
   repositories?: Repository[];
+  defaultRepo?: string;
   onClose: () => void;
   onSubmit: (label: string, icon: string, repo?: string | null) => void;
 }) {
   const [label, setLabel] = useState(editing?.label ?? '');
   const [icon, setIcon] = useState(editing?.icon ?? WORKSPACE_ICONS[0]);
-  const [repo, setRepo] = useState<string | null>(editing?.repo ?? (repositories[0]?.fullName ?? null));
+  const [repo, setRepo] = useState<string | null>(editing?.repo ?? defaultRepo ?? (repositories[0]?.fullName ?? null));
 
   if (!open) return null;
 
@@ -1116,25 +1215,32 @@ function WorkspaceModal({
           )}
         />
 
-        <div className="mb-4">
-          <div className="mb-1.5 text-xs text-foreground/40">Repository</div>
-          <select
-            value={repo ?? ''}
-            onChange={e => setRepo(e.target.value || null)}
-            className={cn(
-              'w-full rounded-md border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-foreground',
-              noFocusRing
-            )}
-          >
-            <option value="">None</option>
-            {repositories.map(r => (
-              <option key={r.id} value={r.fullName}>
-                {r.fullName}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-[11px] text-foreground/35">Per-repo boundary for this workspace.</p>
-        </div>
+        {editing && (
+          <div className="mb-4">
+            <div className="mb-1.5 text-xs text-foreground/40">Repository</div>
+            <select
+              value={repo ?? ''}
+              onChange={e => setRepo(e.target.value || null)}
+              className={cn(
+                'w-full rounded-md border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-foreground',
+                noFocusRing
+              )}
+            >
+              <option value="">None</option>
+              {repositories.map(r => (
+                <option key={r.id} value={r.fullName}>
+                  {r.fullName}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-foreground/35">Per-repo boundary for this workspace.</p>
+          </div>
+        )}
+        {!editing && defaultRepo && (
+          <p className="mb-4 text-[11px] text-foreground/35">
+            Scoped to the active repository: {defaultRepo}
+          </p>
+        )}
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onClose} className={noFocusRing}>
@@ -1620,8 +1726,11 @@ export function Sidebar({
         </div>
 
         {/* Nav */}
-        <ScrollArea className="flex-1 overflow-hidden">
-          <nav className="flex flex-col gap-4 px-2 pb-4 pt-3">
+        {/* Radix wraps viewport content in a `display: table; min-width: 100%` div,
+            which lets rows grow past the sidebar width and pushes the add/options
+            buttons out of view. Forcing it to block constrains rows to the sidebar. */}
+        <ScrollArea className="min-h-0 w-full flex-1 overflow-hidden [&>[data-radix-scroll-area-viewport]>div]:!block">
+          <nav className="flex w-full min-w-0 flex-col gap-4 px-2 pb-4 pt-3">
             {/* Inbox */}
             <div className="flex flex-col gap-0.5">
               <Row
@@ -1708,9 +1817,19 @@ export function Sidebar({
               onMoveNode={onMoveNode}
               onToggleShare={onToggleShare}
               repositories={repositories}
+              repository={repository}
             />
           </nav>
         </ScrollArea>
+
+        <SharedSection
+          workspaces={workspaces}
+          activeDocId={activeDocId}
+          onSelectDoc={onSelectDoc}
+          onRenameNode={onRenameNode}
+          onDeleteNode={onDeleteNode}
+          onToggleShare={onToggleShare}
+        />
 
         {/* Footer */}
         <div className="flex shrink-0 flex-col gap-0.5 px-2 pb-2.5">
