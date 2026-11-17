@@ -5,7 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ChevronRight, ArrowLeft, FileText, RectangleVertical, RectangleHorizontal, History, RotateCcw, Check, AlertCircle, X } from 'lucide-react';
+import { ChevronRight, ArrowLeft, FileText, RectangleVertical, RectangleHorizontal, History, RotateCcw, Check, AlertCircle, X, Users } from 'lucide-react';
 import { DocsEditor } from '@/components/docs/DocsEditor';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -46,6 +46,8 @@ interface DocsPageProps {
   onUpdateContent: (blocks: DocBlock[]) => void;
   /** Save state for this document: shown as an unsaved/saved indicator. */
   saveStatus?: 'saving' | 'saved' | 'error';
+  /** False for shared docs viewed outside their owning workspace (read-only). */
+  editable?: boolean;
 }
 
 export function DocsPage({
@@ -59,6 +61,7 @@ export function DocsPage({
   onRenameTitle,
   onUpdateContent,
   saveStatus,
+  editable = true,
 }: DocsPageProps) {
   const [titleDraft, setTitleDraft] = useState(title);
   const [orientation, setOrientation] = useState<Orientation>(() => {
@@ -203,6 +206,16 @@ export function DocsPage({
           </Button>
         )}
 
+        {!editable && (
+          <span
+            className="flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-foreground/[0.06] px-2 text-[11px] font-medium text-foreground/55"
+            title="Shared from another workspace — read-only"
+          >
+            <Users className="h-3 w-3" />
+            Read-only
+          </span>
+        )}
+
         {saveStatus && (
           <span
             className={cn(
@@ -245,16 +258,18 @@ export function DocsPage({
               <input
                 value={titleDraft}
                 onChange={e => commitTitle(e.target.value)}
+                readOnly={!editable}
                 placeholder="Untitled"
                 className={cn(
                   'mb-2 w-full border-0 bg-transparent text-[34px] font-bold leading-tight tracking-tight text-foreground outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
                   'placeholder:text-foreground/25',
+                  !editable && 'cursor-default',
                 )}
               />
 
               <Separator className="mb-4" />
 
-              <DocsEditor blocks={blocks} onChange={onUpdateContent} />
+              <DocsEditor blocks={blocks} onChange={onUpdateContent} editable={editable} />
             </div>
           </div>
         </ScrollArea>
@@ -323,8 +338,8 @@ export function DocsPage({
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 shrink-0 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
-                              onClick={() => restoreVersion(v.version)}
-                              disabled={restoring}
+                               onClick={() => restoreVersion(v.version)}
+                              disabled={restoring || !editable}
                               aria-label={`Restore version ${v.version}`}
                             >
                               <RotateCcw className="h-3.5 w-3.5" />

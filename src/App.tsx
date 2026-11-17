@@ -117,6 +117,8 @@ function buildTree(flat: ApiKnowledgeNode[]): KnowledgeNode[] {
       title: n.title,
       version: n.version,
       parent_id: n.parent_id,
+      workspace_id: n.workspace_id,
+      shared: n.shared,
       children: [],
       _kids: [],
     });
@@ -133,6 +135,8 @@ function buildTree(flat: ApiKnowledgeNode[]): KnowledgeNode[] {
     label: node.label,
     title: node.title,
     version: node.version,
+    workspace_id: node.workspace_id,
+    shared: node.shared,
     ...(node.type === 'folder'
       ? { children: node._kids.length ? node._kids.map(finalize) : [] }
       : {}),
@@ -548,6 +552,16 @@ function AppContent() {
     return null;
   };
 
+  // Shared nodes are readable from any workspace but only writable from the
+  // workspace that owns them. Edits from elsewhere would 404 on the backend.
+  const isNodeEditable = (workspaceId: string, nodeId: string): boolean => {
+    const ws = workspaces.find(w => w.id === workspaceId);
+    if (!ws) return true;
+    const node = findKnowledgeNode(ws.nodes, nodeId);
+    if (!node) return true;
+    return node.workspace_id === workspaceId || !node.shared;
+  };
+
   const isKnowledgeDescendant = (nodes: KnowledgeNode[], ancestorId: string, targetId: string): boolean => {
     const ancestor = findKnowledgeNode(nodes, ancestorId);
     if (!ancestor || !ancestor.children) return false;
@@ -586,8 +600,23 @@ function AppContent() {
       return n;
     });
 
+  const mapKnowledgeNode = (
+    nodes: KnowledgeNode[],
+    id: string,
+    fn: (n: KnowledgeNode) => KnowledgeNode
+  ): KnowledgeNode[] =>
+    nodes.map(n => {
+      if (n.id === id) return fn(n);
+      if (n.children) return { ...n, children: mapKnowledgeNode(n.children, id, fn) };
+      return n;
+    });
+
   const handleRenameNode = (workspaceId: string, id: string, label: string) => {
     if (!label.trim()) return;
+    if (!isNodeEditable(workspaceId, id)) {
+      toast('This shared node is read-only outside its owning workspace.');
+      return;
+    }
     const trimmed = label.trim();
     updateWorkspaceNodes(workspaceId, prev => renameKnowledgeNode(prev, id, trimmed));
     scheduleRename(workspaceId, id, { label: trimmed });
@@ -597,6 +626,10 @@ function AppContent() {
   // file-name `label`), and also keep the local content cache in sync.
   const handleRenameDocTitle = (workspaceId: string, docId: string, title: string) => {
     if (!title.trim()) return;
+    if (!isNodeEditable(workspaceId, docId)) {
+      toast('This shared document is read-only outside its owning workspace.');
+      return;
+    }
     const trimmed = title.trim();
     docCache.current[docId] = {
       ...(docCache.current[docId] ?? { content: [], version: undefined }),
@@ -608,6 +641,10 @@ function AppContent() {
   };
 
   const handleDeleteNode = async (workspaceId: string, id: string) => {
+    if (!isNodeEditable(workspaceId, id)) {
+      toast('This shared node is read-only outside its owning workspace.');
+      return;
+    }
     updateWorkspaceNodes(workspaceId, prev => removeKnowledgeNode(prev, id).tree);
     try {
       await api.workspaces.deleteNode(workspaceId, id);
@@ -622,6 +659,10 @@ function AppContent() {
     id: string,
     newParentId: string | null
   ) => {
+    if (!isNodeEditable(workspaceId, id)) {
+      toast('This shared node is read-only outside its owning workspace.');
+      return;
+    }
     updateWorkspaceNodes(workspaceId, prev => {
       // Prevent dropping a node into its own subtree.
       if (newParentId !== null && isKnowledgeDescendant(prev, id, newParentId)) return prev;
@@ -642,21 +683,34 @@ function AppContent() {
     updater: (nodes: KnowledgeNode[]) => KnowledgeNode[]
   ) => setWorkspaces(prev => prev.map(w => (w.id === wsId ? { ...w, nodes: updater(w.nodes) } : w)));
 
-  const handleCreateWorkspace = async (label: string, icon: string) => {
+  const handleCreateWorkspace = async (label: string, icon: string, repo?: string | null) => {
     try {
-      const ws = await api.workspaces.create({ label, icon });
+      const ws = await api.workspaces.create({ label, icon, repo: repo ?? null });
       setWorkspaces(prev => [...prev, { ...ws, nodes: [] }]);
     } catch (err) {
       console.error('Failed to create workspace', err);
     }
   };
 
-  const handleRenameWorkspace = async (id: string, label: string, icon: string) => {
-    setWorkspaces(prev => prev.map(w => (w.id === id ? { ...w, label, icon } : w)));
+  const handleRenameWorkspace = async (id: string, label: string, icon: string, repo?: string | null) => {
+    setWorkspaces(prev => prev.map(w => (w.id === id ? { ...w, label, icon, repo: repo ?? null } : w)));
     try {
-      await api.workspaces.update(id, { label, icon });
+      await api.workspaces.update(id, { label, icon, repo: repo ?? null });
     } catch (err) {
       console.error('Failed to rename workspace', err);
+    }
+  };
+
+  const handleToggleShare = async (workspaceId: string, id: string, shared: boolean) => {
+    // Optimistic: flip the badge immediately.
+    updateWorkspaceNodes(workspaceId, prev =>
+      mapKnowledgeNode(prev, id, n => ({ ...n, shared }))
+    );
+    try {
+      await api.workspaces.shareNode(workspaceId, id, shared);
+    } catch (err) {
+      console.error('Failed to toggle share', err);
+      await refreshNodes(workspaceId);
     }
   };
 
@@ -717,6 +771,10 @@ function AppContent() {
   };
 
   const updateDocContent = (workspaceId: string, docId: string, content: DocBlock[]) => {
+    if (!isNodeEditable(workspaceId, docId)) {
+      toast('This shared document is read-only outside its owning workspace.');
+      return;
+    }
     docCache.current[docId] = { ...(docCache.current[docId] ?? {}), content };
     force();
     setSaveStatus(s => ({ ...s, [docId]: 'saving' }));
@@ -968,6 +1026,7 @@ function AppContent() {
             onRenameTitle={title => handleRenameDocTitle(doc.workspaceId, doc.node.id, title)}
             onUpdateContent={content => updateDocContent(doc.workspaceId, doc.node.id, content)}
             saveStatus={saveStatus[doc.node.id]}
+            editable={doc.node.workspace_id === doc.workspaceId || !doc.node.shared}
           />
         );
       }
@@ -1000,6 +1059,7 @@ function AppContent() {
         onRenameNode={handleRenameNode}
         onDeleteNode={handleDeleteNode}
         onMoveNode={handleMoveNode}
+        onToggleShare={handleToggleShare}
         agents={agents}
         activeAgentId={activeAgentId}
         onSelectAgent={id => {

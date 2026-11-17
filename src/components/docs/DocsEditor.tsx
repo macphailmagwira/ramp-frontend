@@ -67,9 +67,11 @@ function newBlock(type: DocBlockType = 'paragraph', text = ''): DocBlock {
 interface DocsEditorProps {
   blocks: DocBlock[];
   onChange: (blocks: DocBlock[]) => void;
+  /** When false, the editor is read-only (e.g. a shared doc from another workspace). */
+  editable?: boolean;
 }
 
-export function DocsEditor({ blocks, onChange }: DocsEditorProps) {
+export function DocsEditor({ blocks, onChange, editable = true }: DocsEditorProps) {
   const refs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [slash, setSlash] = useState<{ id: string; query: string; index: number } | null>(null);
   const draggedId = useRef<string | null>(null);
@@ -333,6 +335,7 @@ export function DocsEditor({ blocks, onChange }: DocsEditorProps) {
           onDragOver={() => setDragOverId(block.id)}
           onDrop={() => { if (draggedId.current) moveBlock(draggedId.current, block.id); setDragOverId(null); draggedId.current = null; }}
           onDragEnd={() => { setDragOverId(null); draggedId.current = null; }}
+          editable={editable}
         />
         );
       })}
@@ -362,6 +365,7 @@ interface BlockRowProps {
   onDragOver: () => void;
   onDrop: () => void;
   onDragEnd: () => void;
+  editable: boolean;
 }
 
 function BlockRow({
@@ -383,6 +387,7 @@ function BlockRow({
   onDragOver,
   onDrop,
   onDragEnd,
+  editable,
 }: BlockRowProps) {
   const meta = BLOCK_META[block.type];
   const empty = block.text.length === 0;
@@ -451,8 +456,9 @@ function BlockRow({
             ref={refEl}
             defaultValue={block.text}
             placeholder={empty ? meta.placeholder : ''}
-            onChange={e => onInput(block.id, e.currentTarget)}
-            onKeyDown={e => onKeyDown(block.id, e)}
+            readOnly={!editable}
+            onChange={editable ? e => onInput(block.id, e.currentTarget) : undefined}
+            onKeyDown={editable ? e => onKeyDown(block.id, e) : undefined}
             onBlur={e => onBlur(block.id, e.currentTarget)}
             rows={1}
             spellCheck

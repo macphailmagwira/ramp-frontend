@@ -582,6 +582,8 @@ export interface ApiKnowledgeNode {
   version: number;
   updated_at: string;
   updated_by: string;
+  /** True when the node is shared across all workspaces (owner-only writes). */
+  shared?: boolean;
 }
 
 export interface ContentResponse {

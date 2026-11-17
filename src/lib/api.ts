@@ -307,7 +307,7 @@ export const api = {
     list: async (): Promise<WorkspaceResponse[]> =>
       request<WorkspaceResponse[]>('/workspaces'),
 
-    create: async (payload: { label: string; icon?: string }): Promise<WorkspaceResponse> =>
+    create: async (payload: { label: string; icon?: string; repo?: string | null }): Promise<WorkspaceResponse> =>
       request<WorkspaceResponse>('/workspaces', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -315,7 +315,7 @@ export const api = {
 
     update: async (
       wsId: string,
-      payload: { label?: string; icon?: string }
+      payload: { label?: string; icon?: string; repo?: string | null }
     ): Promise<WorkspaceResponse> =>
       request<WorkspaceResponse>(`/workspaces/${wsId}`, {
         method: 'PATCH',
@@ -359,7 +359,7 @@ export const api = {
 
     createNode: async (
       wsId: string,
-      payload: { parent_id: string | null; type: 'folder' | 'file'; label: string; title?: string }
+      payload: { parent_id: string | null; type: 'folder' | 'file'; label: string; title?: string; shared?: boolean }
     ): Promise<ApiKnowledgeNode> =>
       request<ApiKnowledgeNode>(`/workspaces/${wsId}/nodes`, {
         method: 'POST',
@@ -369,7 +369,7 @@ export const api = {
     renameNode: async (
       wsId: string,
       nodeId: string,
-      payload: { label?: string; title?: string }
+      payload: { label?: string; title?: string; shared?: boolean }
     ): Promise<ApiKnowledgeNode> =>
       request<ApiKnowledgeNode>(`/workspaces/${wsId}/nodes/${nodeId}`, {
         method: 'PATCH',
@@ -390,6 +390,17 @@ export const api = {
         body: JSON.stringify(payload),
       });
     },
+
+    // ── Sharing ──
+    shareNode: async (
+      wsId: string,
+      nodeId: string,
+      shared: boolean
+    ): Promise<ApiKnowledgeNode> =>
+      request<ApiKnowledgeNode>(`/workspaces/${wsId}/nodes/${nodeId}/share`, {
+        method: 'POST',
+        body: JSON.stringify({ shared }),
+      }),
 
     // ── Document content + version history ──
     getContent: async (
@@ -446,6 +457,8 @@ export interface WorkspaceResponse {
   label: string;
   icon: string;
   role: WorkspaceRole;
+  /** Per-repo boundary this workspace is scoped to (string|null). */
+  repo: string | null;
   created_at: string;
   updated_at: string;
 }

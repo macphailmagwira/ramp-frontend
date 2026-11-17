@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { gradientFor, initialsOf } from '@/lib/avatar';
@@ -49,6 +49,7 @@ import {
   GitCommit,
   Folder,
   File,
+  FileText,
   Users,
   Settings,
   PanelLeftClose,
@@ -96,6 +97,8 @@ export interface KnowledgeNode {
   content?: DocBlock[];
   // Server-owned metadata (optional on client-built nodes)
   parent_id?: string | null;
+  workspace_id?: string;
+  shared?: boolean;
   version?: number;
   updated_at?: string;
   updated_by?: string;
@@ -106,6 +109,7 @@ export interface Workspace {
   label: string;
   icon: string; // emoji
   nodes: KnowledgeNode[];
+  repo?: string | null;
   // Server-owned metadata (optional until hydrated from the API)
   owner_id?: string;
   role?: WorkspaceRole;
@@ -140,13 +144,14 @@ interface SidebarProps {
   loadingWorkspaces?: boolean;
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
-  onCreateWorkspace?: (label: string, icon: string) => void;
-  onRenameWorkspace?: (id: string, label: string, icon: string) => void;
+  onCreateWorkspace?: (label: string, icon: string, repo?: string | null) => void;
+  onRenameWorkspace?: (id: string, label: string, icon: string, repo?: string | null) => void;
   onDeleteWorkspace?: (id: string) => void;
   onCreateNode?: (workspaceId: string, parentId: string | null, type: KnowledgeNodeType, label: string) => void;
   onRenameNode?: (workspaceId: string, id: string, label: string) => void;
   onDeleteNode?: (workspaceId: string, id: string) => void;
   onMoveNode?: (workspaceId: string, id: string, newParentId: string | null) => void;
+  onToggleShare?: (workspaceId: string, id: string, shared: boolean) => void;
   agents?: AgentItem[];
   activeAgentId?: string;
   onSelectAgent?: (agentId: string) => void;
@@ -398,17 +403,23 @@ function KnowledgeAddControl({
   );
 }
 
-// Per-node options menu (⋯): Rename / Delete. Click-to-open, portaled so it
-// escapes the sidebar's overflow clipping.
+// Per-node options menu (⋯): Rename / Delete / Share. Click-to-open, portaled so
+// it escapes the sidebar's overflow clipping. Edit actions are hidden when the
+// node is shared and not owned by the active workspace.
 function KnowledgeOptionsControl({
   node,
+  editable,
   onRename,
   onDelete,
+  onToggleShare,
   reveal = 'group-hover/node:opacity-100',
 }: {
   node: KnowledgeNode;
+  /** False for shared nodes viewed outside their owning workspace. */
+  editable: boolean;
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
+  onToggleShare?: (id: string, shared: boolean) => void;
   reveal?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -446,24 +457,39 @@ function KnowledgeOptionsControl({
               className="fixed z-[1000] min-w-[140px] rounded-md border border-border/70 bg-popover p-1 shadow-lg"
               style={{ top: pos.top, left: pos.left }}
             >
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  onRename(node.id);
-                }}
-                className={cn(menuItemCls, noFocusRing)}
-              >
-                Rename
-              </button>
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  onDelete(node.id);
-                }}
-                className={cn(menuItemCls, 'text-destructive hover:text-destructive', noFocusRing)}
-              >
-                Delete
-              </button>
+              {editable && (
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    onRename(node.id);
+                  }}
+                  className={cn(menuItemCls, noFocusRing)}
+                >
+                  Rename
+                </button>
+              )}
+              {editable && (
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    onDelete(node.id);
+                  }}
+                  className={cn(menuItemCls, 'text-destructive hover:text-destructive', noFocusRing)}
+                >
+                  Delete
+                </button>
+              )}
+              {onToggleShare && (
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    onToggleShare(node.id, !node.shared);
+                  }}
+                  className={cn(menuItemCls, noFocusRing)}
+                >
+                  {node.shared ? 'Unshare' : 'Share with Team'}
+                </button>
+              )}
             </div>
           </>,
           document.body
@@ -486,6 +512,7 @@ function WorkspaceNodes({
   onRenameNode,
   onDeleteNode,
   onMoveNode,
+  onToggleShare,
 }: {
   workspaceId: string;
   nodes: KnowledgeNode[];
@@ -498,6 +525,7 @@ function WorkspaceNodes({
   onRenameNode?: (workspaceId: string, id: string, label: string) => void;
   onDeleteNode?: (workspaceId: string, id: string) => void;
   onMoveNode?: (workspaceId: string, id: string, newParentId: string | null) => void;
+  onToggleShare?: (id: string, shared: boolean) => void;
 }) {
   const [openNodes, setOpenNodes] = useState<Set<string>>(() => new Set());
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -551,6 +579,9 @@ function WorkspaceNodes({
 
   const renderNode = (node: KnowledgeNode, depth: number): React.ReactNode => {
     const isFolder = node.type === 'folder';
+    // Editable only when the node belongs to (is owned by) the active workspace.
+    // Shared nodes viewed elsewhere are read-only (rename/delete/move disabled).
+    const editable = node.workspace_id === workspaceId;
     const open = openNodes.has(node.id);
     const hasChildren = (node.children?.length ?? 0) > 0;
     const expandable = isFolder || hasChildren;
@@ -564,11 +595,11 @@ function WorkspaceNodes({
             'group/node flex h-[22px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]',
             dragOverId === node.id && 'bg-foreground/[0.06] ring-1 ring-foreground/30'
           )}
-          draggable={!!onMoveNode}
-          onDragStart={e => onDragStart(e, node.id)}
+          draggable={editable && !!onMoveNode}
+          onDragStart={editable ? e => onDragStart(e, node.id) : undefined}
           onDragEnd={onDragEnd}
-          onDragOver={e => onNodeDragOver(e, node.id)}
-          onDrop={e => onNodeDrop(e, node.id)}
+          onDragOver={editable ? e => onNodeDragOver(e, node.id) : undefined}
+          onDrop={editable ? e => onNodeDrop(e, node.id) : undefined}
         >
           {renamingId === node.id ? (
               <NewItemInput
@@ -612,15 +643,29 @@ function WorkspaceNodes({
                   isFolder ? 'text-foreground/40 dark:text-foreground/70' : 'text-foreground/35'
                 )}
               />
-              <span className="flex-1 truncate text-left">{node.label}</span>
+              <span className="flex-1 min-w-0 truncate text-left">{node.label}</span>
+              {node.shared && (
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-foreground/35">
+                      <Users className="h-3 w-3" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    Shared {editable ? '(owned by this workspace)' : 'from another workspace — read-only'}
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </button>
           )}
-          {isFolder && onCreateNode && <KnowledgeAddControl onPick={type => onStartCreate(node.id, type)} />}
-          {(onRenameNode || onDeleteNode) && (
+          {isFolder && editable && onCreateNode && <KnowledgeAddControl onPick={type => onStartCreate(node.id, type)} />}
+          {(editable && (onRenameNode || onDeleteNode || onToggleShare)) && (
             <KnowledgeOptionsControl
               node={node}
+              editable={editable}
               onRename={id => setRenamingId(id)}
               onDelete={id => onDeleteNode?.(workspaceId, id)}
+              onToggleShare={onToggleShare}
             />
           )}
         </div>
@@ -644,15 +689,19 @@ function WorkspaceNodes({
     );
   };
 
+  // Shared nodes are aggregated into a single global "Shared" section in
+  // WorkspaceSection, so they're excluded from each workspace's local tree.
+  const localNodes = nodes.filter(n => !n.shared);
+
   return (
     <div
-      className="flex min-h-[8px] flex-col gap-0.5"
+      className="flex min-h-[8px] flex-col gap-1.5"
       onDragOver={e => {
         if (onMoveNode) e.preventDefault();
       }}
       onDrop={onRootDrop}
     >
-      {nodes.map(node => renderNode(node, 0))}
+      {localNodes.map(node => renderNode(node, 0))}
       {isOpen && creating?.parentId === null && (
         <NewItemInput
           key="__new-root"
@@ -677,6 +726,7 @@ function WorkspaceSection({
   onToggleSection,
   activeDocId,
   onSelectDoc,
+  repositories = [],
   onCreateWorkspace,
   onRenameWorkspace,
   onDeleteWorkspace,
@@ -684,6 +734,7 @@ function WorkspaceSection({
   onRenameNode,
   onDeleteNode,
   onMoveNode,
+  onToggleShare,
 }: {
   workspaces: Workspace[];
   loadingWorkspaces?: boolean;
@@ -692,18 +743,23 @@ function WorkspaceSection({
   onToggleSection: () => void;
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
-  onCreateWorkspace?: (label: string, icon: string) => void;
-  onRenameWorkspace?: (id: string, label: string, icon: string) => void;
+  repositories?: Repository[];
+  onCreateWorkspace?: (label: string, icon: string, repo?: string | null) => void;
+  onRenameWorkspace?: (id: string, label: string, icon: string, repo?: string | null) => void;
   onDeleteWorkspace?: (id: string) => void;
   onCreateNode?: (workspaceId: string, parentId: string | null, type: KnowledgeNodeType, label: string) => void;
   onRenameNode?: (workspaceId: string, id: string, label: string) => void;
   onDeleteNode?: (workspaceId: string, id: string) => void;
   onMoveNode?: (workspaceId: string, id: string, newParentId: string | null) => void;
+  onToggleShare?: (workspaceId: string, id: string, shared: boolean) => void;
 }) {
   const [openWs, setOpenWs] = useState<Set<string>>(() => new Set());
   const [creating, setCreating] = useState<{ workspaceId: string; parentId: string | null; type: KnowledgeNodeType } | null>(null);
   const [editing, setEditing] = useState<Workspace | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [sharedOpen, setSharedOpen] = useState(true);
+  const [sharedOpenNodes, setSharedOpenNodes] = useState<Set<string>>(() => new Set());
+  const [sharedRenaming, setSharedRenaming] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -714,6 +770,114 @@ function WorkspaceSection({
       else next.add(id);
       return next;
     });
+  };
+
+  const sharedNodes = workspaces.flatMap(ws =>
+    ws.nodes.filter(n => n.shared).map(n => ({ ...n, workspace_id: ws.id }))
+  );
+
+  const handleToggleShared = (id: string, shared: boolean) => {
+    const node = sharedNodes.find(n => n.id === id);
+    if (node) onToggleShare?.(node.workspace_id, id, shared);
+  };
+
+  const toggleSharedOpen = (id: string) => {
+    setSharedOpenNodes(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const renderSharedNode = (node: KnowledgeNode & { workspace_id: string }, depth: number) => {
+    const open = sharedOpenNodes.has(node.id);
+    const renaming = sharedRenaming === node.id;
+    const children = node.children ?? [];
+    const hasChildren = children.length > 0;
+    if (renaming) {
+      return (
+        <div
+          key={node.id}
+          style={{ paddingLeft: 10 + depth * 12 }}
+          className="mb-0.5 flex h-[26px] items-center rounded-md bg-foreground/[0.05]"
+        >
+          <input
+            autoFocus
+            defaultValue={node.label}
+            className={cn(
+              'h-5 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-foreground/35',
+              noFocusRing
+            )}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v && v !== node.label) onRenameNode?.(node.workspace_id, node.id, v);
+              setSharedRenaming(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              else if (e.key === 'Escape') setSharedRenaming(null);
+            }}
+          />
+        </div>
+      );
+    }
+    return (
+      <div
+        key={node.id}
+        className={cn(
+          'group flex h-[26px] min-w-0 items-center gap-1 rounded-md pr-1 transition-colors',
+          'hover:bg-foreground/[0.045]'
+        )}
+        style={{ paddingLeft: 10 + depth * 12 }}
+      >
+        {hasChildren ? (
+          <button
+            onClick={() => toggleSharedOpen(node.id)}
+            style={{ paddingLeft: 4 }}
+            className={cn(
+              'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm text-foreground/85',
+              noFocusRing
+            )}
+          >
+            <ChevronRight
+              className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', open && 'rotate-90')}
+            />
+            {node.type === 'folder' ? (
+              <Folder className="h-3.5 w-3.5 shrink-0 text-sky-400/80" />
+            ) : (
+              <FileText className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
+            )}
+            <span className="flex-1 min-w-0 truncate text-left">{node.label}</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => onSelectDoc?.(node.id)}
+            style={{ paddingLeft: 16 }}
+            className={cn(
+              'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md text-sm text-foreground/85',
+              activeDocId === node.id && 'bg-foreground/[0.07] text-foreground',
+              noFocusRing
+            )}
+          >
+            {node.type === 'folder' ? (
+              <Folder className="h-3.5 w-3.5 shrink-0 text-sky-400/80" />
+            ) : (
+              <FileText className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
+            )}
+            <span className="flex-1 min-w-0 truncate text-left">{node.label}</span>
+          </button>
+        )}
+        <KnowledgeOptionsControl
+          node={node}
+          editable={false}
+          reveal="group-hover:opacity-100"
+          onRename={(id) => setSharedRenaming(id)}
+          onDelete={(id) => onDeleteNode?.(node.workspace_id, id)}
+          onToggleShare={onToggleShare ? (id, shared) => handleToggleShared(id, shared) : undefined}
+        />
+      </div>
+    );
   };
 
   return (
@@ -766,6 +930,9 @@ function WorkspaceSection({
           ) : (
           workspaces.map(ws => {
             const open = openWs.has(ws.id);
+            const handleToggleShare = onToggleShare
+              ? (id: string, shared: boolean) => onToggleShare(ws.id, id, shared)
+              : undefined;
             return (
               <div key={ws.id} className="flex flex-col">
                 <div className="group flex h-[26px] w-full items-center gap-1.5 rounded-md pr-1 hover:bg-foreground/[0.045]">
@@ -785,6 +952,7 @@ function WorkspaceSection({
                   </button>
                   <KnowledgeOptionsControl
                     node={{ id: ws.id, type: 'folder', label: ws.label }}
+                    editable
                     reveal="group-hover:opacity-100"
                     onRename={id => {
                       const w = workspaces.find(x => x.id === id);
@@ -816,25 +984,55 @@ function WorkspaceSection({
                     onRenameNode={onRenameNode}
                     onDeleteNode={onDeleteNode}
                     onMoveNode={onMoveNode}
+                    onToggleShare={handleToggleShare}
                   />
                 )}
               </div>
             );
           })
           )}
+
+          <div className="mt-4 flex flex-col gap-0.5 border-t border-border/40 pt-3">
+            <button
+              onClick={() => setSharedOpen(v => !v)}
+              className={cn(
+                'flex h-[26px] w-full items-center gap-1.5 rounded-md px-2 text-sm text-foreground/70 transition-colors hover:bg-foreground/[0.045]',
+                noFocusRing
+              )}
+            >
+              <ChevronRight
+                className={cn('h-3 w-3 shrink-0 text-foreground/40 transition-transform', sharedOpen && 'rotate-90')}
+              />
+              <Users className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
+              <span className="flex-1 truncate text-left">Shared</span>
+            </button>
+              {sharedOpen && (
+          <div className="flex flex-col gap-0.5">
+                {sharedNodes.length === 0 ? (
+                  <div className="flex h-[28px] items-center px-6 text-xs text-foreground/40">
+                    No shared docs yet.
+                  </div>
+                ) : (
+                  sharedNodes.map(n => renderSharedNode(n, 0))
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       <WorkspaceModal
+        key={modalOpen ? (editing?.id ?? 'new') : 'closed'}
         open={modalOpen}
         editing={editing}
+        repositories={repositories}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
         }}
-        onSubmit={(label, icon) => {
-          if (editing) onRenameWorkspace?.(editing.id, label, icon);
-          else onCreateWorkspace?.(label, icon);
+        onSubmit={(label, icon, repo) => {
+          if (editing) onRenameWorkspace?.(editing.id, label, icon, repo);
+          else onCreateWorkspace?.(label, icon, repo);
           setModalOpen(false);
           setEditing(null);
         }}
@@ -848,30 +1046,26 @@ function WorkspaceSection({
 function WorkspaceModal({
   open,
   editing,
+  repositories = [],
   onClose,
   onSubmit,
 }: {
   open: boolean;
   editing?: Workspace | null;
+  repositories?: Repository[];
   onClose: () => void;
-  onSubmit: (label: string, icon: string) => void;
+  onSubmit: (label: string, icon: string, repo?: string | null) => void;
 }) {
-  const [label, setLabel] = useState('');
-  const [icon, setIcon] = useState(WORKSPACE_ICONS[0]);
-
-  useEffect(() => {
-    if (open) {
-      setLabel(editing?.label ?? '');
-      setIcon(editing?.icon ?? WORKSPACE_ICONS[0]);
-    }
-  }, [open, editing]);
+  const [label, setLabel] = useState(editing?.label ?? '');
+  const [icon, setIcon] = useState(editing?.icon ?? WORKSPACE_ICONS[0]);
+  const [repo, setRepo] = useState<string | null>(editing?.repo ?? (repositories[0]?.fullName ?? null));
 
   if (!open) return null;
 
   const submit = () => {
     const trimmed = label.trim();
     if (!trimmed) return;
-    onSubmit(trimmed, icon);
+    onSubmit(trimmed, icon, repo);
   };
 
   return createPortal(
@@ -921,6 +1115,26 @@ function WorkspaceModal({
             noFocusRing
           )}
         />
+
+        <div className="mb-4">
+          <div className="mb-1.5 text-xs text-foreground/40">Repository</div>
+          <select
+            value={repo ?? ''}
+            onChange={e => setRepo(e.target.value || null)}
+            className={cn(
+              'w-full rounded-md border border-border/70 bg-transparent px-2.5 py-1.5 text-sm text-foreground',
+              noFocusRing
+            )}
+          >
+            <option value="">None</option>
+            {repositories.map(r => (
+              <option key={r.id} value={r.fullName}>
+                {r.fullName}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-foreground/35">Per-repo boundary for this workspace.</p>
+        </div>
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onClose} className={noFocusRing}>
@@ -1355,6 +1569,7 @@ export function Sidebar({
   onRenameNode,
   onDeleteNode,
   onMoveNode,
+  onToggleShare,
   agents = [],
   activeAgentId,
   onSelectAgent,
@@ -1491,6 +1706,8 @@ export function Sidebar({
               onRenameNode={onRenameNode}
               onDeleteNode={onDeleteNode}
               onMoveNode={onMoveNode}
+              onToggleShare={onToggleShare}
+              repositories={repositories}
             />
           </nav>
         </ScrollArea>
