@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
+import type { ApiInboxItem } from '@/types';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import {
   DropdownMenu,
@@ -14,6 +17,7 @@ import {
   Inbox as InboxIcon,
   AtSign,
   FileText,
+  GitPullRequest,
   Video,
   CheckCheck,
   SlidersHorizontal,
@@ -34,7 +38,7 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type InboxCategory = 'mention' | 'agent' | 'doc' | 'meeting';
+type InboxCategory = 'mention' | 'review' | 'doc' | 'meeting';
 
 interface ActivityLine {
   icon: React.ElementType;
@@ -68,10 +72,43 @@ const CATEGORY_META: Record<
   { label: string; icon: React.ElementType; className: string }
 > = {
   mention: { label: 'Mentions', icon: AtSign, className: 'text-sky-400' },
-  agent: { label: 'Agents', icon: Bot, className: 'text-primary' },
+  review: { label: 'Review', icon: GitPullRequest, className: 'text-primary' },
   doc: { label: 'Docs', icon: FileText, className: 'text-violet-400' },
   meeting: { label: 'Meetings and Chats', icon: Video, className: 'text-amber-400' },
 };
+
+// ── API → local mapping ──────────────────────────────────────────────────────
+// The backend returns activity icons as lucide name strings; resolve them to
+// components here so the rest of the UI can keep using React.ElementType.
+
+const ACTIVITY_ICON_MAP: Record<string, React.ElementType> = {
+  tag: Tag,
+  'user-plus': UserPlus,
+  'message-square': MessageSquare,
+  message: MessageSquare,
+  circle: Circle,
+  'file-text': FileText,
+  check: CheckCheck,
+  'check-check': CheckCheck,
+  'at-sign': AtSign,
+  bot: Bot,
+  video: Video,
+  'git-pull-request': GitPullRequest,
+};
+
+const FALLBACK_ICON = Circle;
+
+function resolveIcon(name: string | undefined): React.ElementType {
+  if (!name) return FALLBACK_ICON;
+  return ACTIVITY_ICON_MAP[name] ?? FALLBACK_ICON;
+}
+
+function toInboxItem(item: ApiInboxItem): InboxItem {
+  return {
+    ...item,
+    activity: item.activity.map((a) => ({ ...a, icon: resolveIcon(a.icon) })),
+  };
+}
 
 // ── Time helpers ─────────────────────────────────────────────────────────
 
@@ -113,7 +150,7 @@ function isoAgo(hours: number): string {
 const MOCK_ITEMS: InboxItem[] = [
   {
     id: 'i1',
-    category: 'agent',
+    category: 'review',
     title: '[Planning] Wire up production start/end date to plan summary table',
     context: ['Product-Eng', 'WIP Tickets', 'PR #482'],
     actor: 'Claude',
@@ -197,7 +234,7 @@ const MOCK_ITEMS: InboxItem[] = [
   },
   {
     id: 'i5',
-    category: 'agent',
+    category: 'review',
     title: '[Uploads] Order-style duplicate check only compares within batch',
     context: ['Product-Eng', 'Uploads', 'PR #479'],
     actor: 'Claude',
@@ -266,7 +303,7 @@ const MOCK_ITEMS: InboxItem[] = [
   },
   {
     id: 'i9',
-    category: 'agent',
+    category: 'review',
     title: '[Orders] Rename quantity column and add quote totals',
     context: ['Product-Eng', 'Orders', 'PR #471'],
     actor: 'Claude',
@@ -475,6 +512,29 @@ function DateGroup({
   );
 }
 
+// ── Ghost loading ────────────────────────────────────────────────────────
+
+function InboxSkeleton() {
+  return (
+    <div className="flex flex-col divide-y divide-border/40 overflow-hidden rounded-lg border border-border/40">
+      {Array.from({ length: 7 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex w-full items-center gap-3 px-4 py-2.5 sm:px-6 lg:px-10"
+        >
+          <span className="w-3.5 shrink-0" />
+          <Skeleton className="h-[15px] w-[15px] shrink-0 rounded-sm" />
+          <Skeleton className="h-4 w-[34%] shrink-0 rounded" />
+          <div className="flex min-w-0 flex-1 items-center gap-2 pl-3">
+            <Skeleton className="h-3.5 flex-1 rounded" />
+          </div>
+          <Skeleton className="h-3 w-16 shrink-0 rounded" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Empty state ─────────────────────────────────────────────────────────
 
 function EmptyState({ label }: { label: string }) {
@@ -494,21 +554,49 @@ type TabValue = 'all' | InboxCategory | 'cleared';
 const TABS: { value: TabValue; label: string; icon: React.ElementType }[] = [
   { value: 'all', label: 'All', icon: InboxIcon },
   { value: 'mention', label: 'Mentions', icon: AtSign },
-  { value: 'agent', label: 'Agents', icon: Bot },
+  { value: 'review', label: 'Review', icon: GitPullRequest },
   { value: 'doc', label: 'Docs', icon: FileText },
   { value: 'meeting', label: 'Meetings and Chats', icon: Video },
   { value: 'cleared', label: 'Cleared', icon: CheckCheck },
 ];
 
 export function InboxPage() {
-  const [items, setItems] = useState<InboxItem[]>(MOCK_ITEMS);
+  const [items, setItems] = useState<InboxItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [hiddenCategories, setHiddenCategories] = useState<Set<InboxCategory>>(new Set());
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [active, cleared] = await Promise.all([
+          api.inbox.getItems({ cleared: false }),
+          api.inbox.getItems({ cleared: true }),
+        ]);
+        if (cancelled) return;
+        setItems([...active, ...cleared].map(toInboxItem));
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : 'Failed to load inbox');
+        // Graceful fallback so the UI still renders something.
+        setItems(MOCK_ITEMS);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const unreadCounts = useMemo(() => {
-    const counts: Record<TabValue, number> = { all: 0, mention: 0, agent: 0, doc: 0, meeting: 0, cleared: 0 };
+    const counts: Record<TabValue, number> = { all: 0, mention: 0, review: 0, doc: 0, meeting: 0, cleared: 0 };
     for (const item of items) {
       if (item.cleared || !item.unread) continue;
       counts.all += 1;
@@ -535,11 +623,13 @@ export function InboxPage() {
   const handleToggle = (id: string) => {
     setExpandedId((current) => (current === id ? null : id));
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, unread: false } : it)));
+    void api.inbox.markRead(id);
   };
 
   const handleClear = (id: string) => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, cleared: true, unread: false } : it)));
     setExpandedId((current) => (current === id ? null : current));
+    void api.inbox.markCleared(id);
   };
 
   const handleOpen = (item: InboxItem) => {
@@ -548,12 +638,16 @@ export function InboxPage() {
   };
 
   const handleClearAll = () => {
+    const toClear = items.filter(
+      (it) => !it.cleared && (activeTab === 'all' || it.category === activeTab)
+    );
     setItems((prev) =>
       prev.map((it) =>
         !it.cleared && (activeTab === 'all' || it.category === activeTab) ? { ...it, cleared: true, unread: false } : it
       )
     );
     setExpandedId(null);
+    toClear.forEach((it) => void api.inbox.markCleared(it.id));
   };
 
   const toggleCategoryFilter = (category: InboxCategory) => {
@@ -581,7 +675,7 @@ export function InboxPage() {
                   className={cn(
                     'group flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-all',
                     isActive
-                      ? 'bg-foreground text-background shadow-sm'
+                      ? 'bg-foreground/90 text-background shadow-sm'
                       : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
                   )}
                 >
@@ -653,12 +747,18 @@ export function InboxPage() {
         </div>
 
         {/* ── List ── */}
-        {visibleItems.length === 0 ? (
+        {loading ? (
+          <div className="px-4 sm:px-6 lg:px-10">
+            <InboxSkeleton />
+          </div>
+        ) : error && items.length === 0 ? (
+          <EmptyState label={`Couldn't load your inbox: ${error}`} />
+        ) : visibleItems.length === 0 ? (
           <EmptyState
             label={
               activeTab === 'cleared'
                 ? 'Cleared items will show up here.'
-                : 'New mentions, agent messages, doc updates, and meeting summaries will show up here.'
+                : 'New mentions, review requests, doc updates, and meeting summaries will show up here.'
             }
           />
         ) : (

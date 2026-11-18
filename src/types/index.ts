@@ -155,6 +155,7 @@ export type ViewState =
   | 'settings'
   | 'agents'
   | 'agents-new'
+  | 'review'
   | 'docs';
 
 // ─── Document blocks (Notion-style editor) ────────────────────────────────────
@@ -619,5 +620,32 @@ export interface VersionDetail {
 
 export interface RestoreVersionResponse {
   version: number;
+}
+
+// ─── Inbox (GET /inbox) ────────────────────────────────────────────────────
+export interface ApiActivityLine {
+  /** Lucide icon name, e.g. "git-pull-request". */
+  icon: string;
+  text: string;
+  time: string; // ISO
+}
+
+export interface ApiInboxItem {
+  id: string;
+  category: 'mention' | 'review' | 'doc' | 'meeting';
+  title: string;
+  context: string[];
+  actor: string;
+  actorIsAi?: boolean;
+  action: string;
+  timestamp: string; // ISO
+  unread: boolean;
+  cleared: boolean;
+  priority?: number;
+  replies?: number;
+  preview: string;
+  activity: ApiActivityLine[];
+  actionLabel: string;
+  url: string;
 }
 

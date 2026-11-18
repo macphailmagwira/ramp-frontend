@@ -21,6 +21,8 @@ import { Toaster } from '@/components/ui/sonner';
 // Layout Components
 import { Sidebar, type KnowledgeNode, type Workspace, type AgentItem } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
+import { CommandPalette } from '@/components/CommandPalette';
+import { useCommandShortcuts } from '@/components/commandShortcuts';
 
 // Auth Pages
 import { LoginPage } from '@/pages/LoginPage';
@@ -41,6 +43,7 @@ import { TeamPage } from '@/pages/TeamPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { AgentsPage } from '@/pages/AgentsPage';
 import { AgentsCatalogPage } from '@/pages/AgentsCatalogPage';
+import { ReviewPage } from '@/pages/ReviewPage';
 import { ComingSoonPage } from '@/pages/ComingSoonPage';
 import { AVAILABLE_AGENTS } from '@/data/agents';
 
@@ -155,6 +158,7 @@ function AppContent() {
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const isDashboardView = [
     'overview',
@@ -175,10 +179,15 @@ function AppContent() {
   }, [isAuthenticating, isDashboardView]);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
 
-  // Workspaces are shown as-is; no client-side filtering by repository.
+  // Workspaces are scoped to the active repo (via the backend `?repo=` filter),
+  // so whatever the backend returns is what we show.
   const visibleWorkspaces = workspaces;
+
+  // Shared nodes are global across all repos, fetched separately.
+  const [sharedNodes, setSharedNodes] = useState<KnowledgeNode[]>([]);
+  const [loadingShared, setLoadingShared] = useState(false);
 
 
   // Loaded document bodies + their server version, keyed by node id.
@@ -192,8 +201,9 @@ function AppContent() {
   const force = () => forceDispatch();
 
   const fetchWorkspaces = useCallback(async () => {
+    setLoadingWorkspaces(true);
     try {
-      const list = await api.workspaces.list();
+      const list = await api.workspaces.list(selectedRepository?.fullName ?? null);
       const withNodes = await Promise.all(
         list.map(async (ws) => {
           let nodes: KnowledgeNode[] = [];
@@ -209,7 +219,21 @@ function AppContent() {
     } catch (err) {
       console.error('Failed to load workspaces', err);
     } finally {
-      setWorkspacesLoaded(true);
+      setLoadingWorkspaces(false);
+    }
+  }, [selectedRepository?.fullName]);
+
+  // Shared nodes are global (not repo-scoped), so they're fetched independently
+  // of the active repo's workspace list above.
+  const fetchSharedNodes = useCallback(async () => {
+    setLoadingShared(true);
+    try {
+      const flat = await api.workspaces.listShared();
+      setSharedNodes(buildTree(flat));
+    } catch (err) {
+      console.error('Failed to load shared nodes', err);
+    } finally {
+      setLoadingShared(false);
     }
   }, []);
 
@@ -311,11 +335,14 @@ function AppContent() {
       st.timer = undefined;
       if (st.ws && st.patch) {
         void api.workspaces.renameNode(st.ws, id, st.patch)
-          .then(() => setSaveStatus(s => ({ ...s, [id]: 'saved' })))
+          .then(() => {
+            setSaveStatus(s => ({ ...s, [id]: 'saved' }));
+            void fetchSharedNodes();
+          })
           .catch(() => setSaveStatus(s => ({ ...s, [id]: 'error' })));
       }
     }, 600);
-  }, []);
+  }, [fetchSharedNodes]);
   const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
   const [saveStatus, setSaveStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({});
   const prevViewRef = useRef<ViewState>('overview');
@@ -371,6 +398,7 @@ function AppContent() {
   const navigateToDashboard = useCallback(async (currentUser: User) => {
     setUser(currentUser);
     fetchWorkspaces();
+    void fetchSharedNodes();
     try {
       setGithubConnected(null);
       const conns = await loadConnectedRepositories();
@@ -400,7 +428,7 @@ function AppContent() {
     } finally {
       setIsAuthenticating(false);
     }
-  }, [loadConnectedRepositories, loadRepositories, fetchWorkspaces]);
+  }, [loadConnectedRepositories, loadRepositories, fetchWorkspaces, fetchSharedNodes]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -493,6 +521,7 @@ function AppContent() {
       setSelectedRepository(repo);
       await loadConnectedRepositories();
       void fetchWorkspaces();
+      void fetchSharedNodes();
       setView('repository-analysis');
     } catch (err) {
       console.error('Failed to connect repository:', err);
@@ -505,6 +534,7 @@ function AppContent() {
     localStorage.setItem(connectedRepoKey(user?.id), repo.id);
     setView('overview');
     void fetchWorkspaces();
+    void fetchSharedNodes();
   };
 
   const handleAddRepository = () => {
@@ -513,6 +543,15 @@ function AppContent() {
   };
 
   const handleNavigate = (newView: ViewState) => setView(newView);
+
+  // Global command shortcuts: ⌘K/Ctrl+K opens the palette; `g` then a key jumps.
+  const commandShortcutHandler = useCommandShortcuts(handleNavigate, () =>
+    setPaletteOpen((o) => !o)
+  );
+  useEffect(() => {
+    window.addEventListener('keydown', commandShortcutHandler);
+    return () => window.removeEventListener('keydown', commandShortcutHandler);
+  }, [commandShortcutHandler]);
 
   const handleAddAgent = () => setView('agents-new');
 
@@ -542,6 +581,7 @@ function AppContent() {
     try {
       await api.workspaces.createNode(workspaceId, { parent_id: parentId, type, label });
       await refreshNodes(workspaceId);
+      void fetchSharedNodes();
     } catch (err) {
       console.error('Failed to create node', err);
     }
@@ -654,6 +694,7 @@ function AppContent() {
     updateWorkspaceNodes(workspaceId, prev => removeKnowledgeNode(prev, id).tree);
     try {
       await api.workspaces.deleteNode(workspaceId, id);
+      void fetchSharedNodes();
     } catch (err) {
       console.error('Failed to delete node', err);
       await refreshNodes(workspaceId);
@@ -678,6 +719,7 @@ function AppContent() {
     });
     try {
       await api.workspaces.moveNode(workspaceId, id, { new_parent_id: newParentId });
+      void fetchSharedNodes();
     } catch (err) {
       console.error('Failed to move node', err);
       await refreshNodes(workspaceId);
@@ -714,6 +756,7 @@ function AppContent() {
     );
     try {
       await api.workspaces.shareNode(workspaceId, id, shared);
+      void fetchSharedNodes();
     } catch (err) {
       console.error('Failed to toggle share', err);
       await refreshNodes(workspaceId);
@@ -942,12 +985,12 @@ function AppContent() {
         return (
           <ComingSoonPage
             title="Meetings"
-            description="Automatically join, record, and summarize your meetings so the important decisions never get lost."
+            description="Turn team meetings into a searchable source of truth so the engineering decisions, context, and rationale that usually get lost are always recoverable."
             icon={Video}
             bullets={[
-              'Auto-generated summaries with decisions and action items',
-              'Calendar sync with one-click join',
-              'Searchable transcripts across all your calls',
+              'Auto-generated summaries capturing the decisions and the why behind them',
+              'Action items and owners synced straight to your inbox',
+              'Searchable transcripts across every call — find the reasoning behind any choice',
             ]}
           />
         );
@@ -983,6 +1026,8 @@ function AppContent() {
             }}
           />
         );
+      case 'review':
+        return <ReviewPage />;
       case 'docs': {
         const doc = activeDocId ? findDoc(activeDocId) : null;
         if (!doc) return <InboxPage />;
@@ -1055,7 +1100,9 @@ function AppContent() {
         user={user}
         onLogout={handleLogout}
         workspaces={visibleWorkspaces}
-        loadingWorkspaces={!workspacesLoaded}
+        loadingWorkspaces={loadingWorkspaces}
+        loadingShared={loadingShared}
+        sharedNodes={sharedNodes}
         activeDocId={activeDocId}
         onSelectDoc={handleSelectDoc}
         onCreateWorkspace={handleCreateWorkspace}
@@ -1066,23 +1113,22 @@ function AppContent() {
         onDeleteNode={handleDeleteNode}
         onMoveNode={handleMoveNode}
         onToggleShare={handleToggleShare}
-        agents={agents}
-        activeAgentId={activeAgentId}
-        onSelectAgent={id => {
-          setActiveAgentId(id);
-          setView('agents');
-        }}
-        onAddAgent={handleAddAgent}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar
           onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)}
           isSidebarOpen={isSidebarOpen}
+          onOpenSearch={() => setPaletteOpen(true)}
         />
         <main className="flex-1 overflow-auto">
           {renderDashboardContent()}
         </main>
       </div>
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        onNavigate={handleNavigate}
+      />
       <Toaster richColors position="top-right" />
     </div>
   );

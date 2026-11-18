@@ -1,4 +1,4 @@
-import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository,   StorybookBookResponse, StorybookFileContentResponse, ArchitectureStoryResponse, ApiKnowledgeNode, ContentResponse, PutContentRequest, VersionSummary, VersionDetail, RestoreVersionResponse, WorkspaceMember, WorkspaceRole } from '@/types';
+import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository,   StorybookBookResponse, StorybookFileContentResponse, ArchitectureStoryResponse, ApiKnowledgeNode, ContentResponse, PutContentRequest, VersionSummary, VersionDetail, RestoreVersionResponse, WorkspaceMember, WorkspaceRole, ApiInboxItem } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -304,8 +304,14 @@ export const api = {
 
   workspaces: {
     // ── Workspaces ──
-    list: async (): Promise<WorkspaceResponse[]> =>
-      request<WorkspaceResponse[]>('/workspaces'),
+    list: async (repo?: string | null): Promise<WorkspaceResponse[]> =>
+      request<WorkspaceResponse[]>(
+        '/workspaces' + (repo ? `?repo=${encodeURIComponent(repo)}` : '')
+      ),
+
+    // All shared nodes across every workspace, ignoring repo scoping.
+    listShared: async (): Promise<ApiKnowledgeNode[]> =>
+      request<ApiKnowledgeNode[]>('/workspaces/shared'),
 
     create: async (payload: { label: string; icon?: string; repo?: string | null }): Promise<WorkspaceResponse> =>
       request<WorkspaceResponse>('/workspaces', {
@@ -448,6 +454,23 @@ export const api = {
         `/workspaces/${wsId}/nodes/${nodeId}/versions/${version}/restore`,
         { method: 'POST' }
       ),
+  },
+
+  // ── Inbox ──
+  inbox: {
+    getItems: async (params?: { category?: string; cleared?: boolean }): Promise<ApiInboxItem[]> => {
+      const qs = new URLSearchParams();
+      if (params?.category) qs.set('category', params.category);
+      if (params?.cleared !== undefined) qs.set('cleared', String(params.cleared));
+      const query = qs.toString();
+      return request<ApiInboxItem[]>(`/inbox${query ? `?${query}` : ''}`);
+    },
+    markRead: async (id: string): Promise<void> =>
+      request(`/inbox/${id}/read`, { method: 'POST' }),
+    markCleared: async (id: string): Promise<void> =>
+      request(`/inbox/${id}/clear`, { method: 'POST' }),
+    markAllRead: async (): Promise<void> =>
+      request('/inbox/read-all', { method: 'POST' }),
   },
 };
 

@@ -46,7 +46,6 @@ import {
   BookOpen,
   Video,
   GitPullRequest,
-  GitCommit,
   Folder,
   File,
   FileText,
@@ -60,8 +59,6 @@ import {
   Check,
   Plus,
   MoreHorizontal,
-  Search,
-  SquarePen,
   Star,
   GitFork,
   Info,
@@ -142,6 +139,8 @@ interface SidebarProps {
   onLogout?: () => void;
   workspaces?: Workspace[];
   loadingWorkspaces?: boolean;
+  loadingShared?: boolean;
+  sharedNodes?: KnowledgeNode[];
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
   onCreateWorkspace?: (label: string, icon: string, repo?: string | null) => void;
@@ -152,10 +151,6 @@ interface SidebarProps {
   onDeleteNode?: (workspaceId: string, id: string) => void;
   onMoveNode?: (workspaceId: string, id: string, newParentId: string | null) => void;
   onToggleShare?: (workspaceId: string, id: string, shared: boolean) => void;
-  agents?: AgentItem[];
-  activeAgentId?: string;
-  onSelectAgent?: (agentId: string) => void;
-  onAddAgent?: () => void;
 }
 
 interface NavItem {
@@ -976,14 +971,16 @@ function WorkspaceSection({
 // visible regardless of how many workspaces are expanded. ────────────────────────
 
 function SharedSection({
-  workspaces,
+  sharedNodes,
+  loadingShared,
   activeDocId,
   onSelectDoc,
   onRenameNode,
   onDeleteNode,
   onToggleShare,
 }: {
-  workspaces: Workspace[];
+  sharedNodes: KnowledgeNode[];
+  loadingShared?: boolean;
   activeDocId?: string;
   onSelectDoc?: (docId: string) => void;
   onRenameNode?: (workspaceId: string, id: string, label: string) => void;
@@ -994,13 +991,9 @@ function SharedSection({
   const [sharedOpenNodes, setSharedOpenNodes] = useState<Set<string>>(() => new Set());
   const [sharedRenaming, setSharedRenaming] = useState<string | null>(null);
 
-  const sharedNodes = workspaces.flatMap(ws =>
-    ws.nodes.filter(n => n.shared).map(n => ({ ...n, workspace_id: ws.id }))
-  );
-
   const handleToggleShared = (id: string, shared: boolean) => {
     const node = sharedNodes.find(n => n.id === id);
-    if (node) onToggleShare?.(node.workspace_id, id, shared);
+    if (node) onToggleShare?.(node.workspace_id!, id, shared);
   };
 
   const toggleSharedOpen = (id: string) => {
@@ -1012,7 +1005,7 @@ function SharedSection({
     });
   };
 
-  const renderSharedNode = (node: KnowledgeNode & { workspace_id: string }, depth: number) => {
+  const renderSharedNode = (node: KnowledgeNode, depth: number) => {
     const open = sharedOpenNodes.has(node.id);
     const renaming = sharedRenaming === node.id;
     const children = node.children ?? [];
@@ -1033,7 +1026,7 @@ function SharedSection({
             )}
             onBlur={(e) => {
               const v = e.target.value.trim();
-              if (v && v !== node.label) onRenameNode?.(node.workspace_id, node.id, v);
+              if (v && v !== node.label) onRenameNode?.(node.workspace_id!, node.id, v);
               setSharedRenaming(null);
             }}
             onKeyDown={(e) => {
@@ -1096,7 +1089,7 @@ function SharedSection({
           editable={false}
           reveal="group-hover:opacity-100"
           onRename={(id) => setSharedRenaming(id)}
-          onDelete={(id) => onDeleteNode?.(node.workspace_id, id)}
+          onDelete={(id) => onDeleteNode?.(node.workspace_id!, id)}
           onToggleShare={onToggleShare ? (id, shared) => handleToggleShared(id, shared) : undefined}
         />
       </div>
@@ -1125,7 +1118,16 @@ function SharedSection({
       </button>
       {sharedOpen && (
         <div className="flex flex-col gap-0.5">
-          {sharedNodes.length === 0 ? (
+          {loadingShared ? (
+            <>
+              {[0, 1, 2].map(i => (
+                <div key={i} className="flex h-[26px] items-center gap-2 rounded-md px-6">
+                  <Skeleton className="h-3 w-3 rounded-sm" />
+                  <Skeleton className="h-3 flex-1" />
+                </div>
+              ))}
+            </>
+          ) : sharedNodes.length === 0 ? (
             <div className="flex h-[28px] items-center px-6 text-xs text-foreground/40">
               No shared docs yet.
             </div>
@@ -1253,79 +1255,6 @@ function WorkspaceModal({
       </div>
     </div>,
     document.body
-  );
-}
-
-// ─── Agents section — add new agent + example agents ───────────────────────
-
-function AgentsSection({
-  agents,
-  isOpen,
-  sectionCollapsed,
-  onToggleSection,
-  activeAgentId,
-  onSelectAgent,
-  onAddAgent,
-}: {
-  agents: AgentItem[];
-  isOpen: boolean;
-  sectionCollapsed: boolean;
-  onToggleSection: () => void;
-  activeAgentId?: string;
-  onSelectAgent?: (id: string) => void;
-  onAddAgent?: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      {isOpen && (
-        <div className="group flex h-6 w-full items-center gap-1 rounded">
-          <div className="flex-1">
-            <SectionHeader label="Agents" collapsed={sectionCollapsed} onToggle={onToggleSection} />
-          </div>
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => onAddAgent?.()}
-                aria-label="Add agent"
-                className={cn(
-                  'group/add mr-1 flex h-5 w-5 items-center justify-center rounded text-foreground/45 transition-all duration-200 ease-out',
-                  'hover:bg-foreground/[0.07] hover:text-foreground hover:shadow-sm active:scale-90',
-                  noFocusRing
-                )}
-              >
-                <Plus className="h-3 w-3 transition-transform duration-200 ease-out group-hover/add:rotate-90 group-hover/add:scale-110" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Add agent</TooltipContent>
-          </Tooltip>
-        </div>
-      )}
-
-      {isOpen && !sectionCollapsed && (
-        <>
-          {/* Active agents — outer list */}
-          {agents.map(agent => {
-            const Icon = agent.icon ?? (agent.id === 'pr' ? GitPullRequest : GitCommit);
-            return (
-              <Row
-                key={agent.id}
-                icon={Icon}
-                label={agent.label}
-                isActive={activeAgentId === agent.id}
-                isOpen={isOpen}
-                onClick={() => onSelectAgent?.(agent.id)}
-              />
-            );
-          })}
-
-          {agents.length === 0 && (
-            <div className="flex h-[30px] items-center px-2 text-xs text-foreground/45">
-              No agents enabled yet.
-            </div>
-          )}
-        </>
-      )}
-    </div>
   );
 }
 
@@ -1666,6 +1595,8 @@ export function Sidebar({
   onLogout,
   workspaces = [],
   loadingWorkspaces,
+  sharedNodes = [],
+  loadingShared = false,
   activeDocId,
   onSelectDoc,
   onCreateWorkspace,
@@ -1676,14 +1607,10 @@ export function Sidebar({
   onDeleteNode,
   onMoveNode,
   onToggleShare,
-  agents = [],
-  activeAgentId,
-  onSelectAgent,
-  onAddAgent,
 }: SidebarProps) {
   const [exploreCollapsed, setExploreCollapsed] = useState(false);
   const [syncCollapsed, setSyncCollapsed] = useState(false);
-  const [agentsCollapsed, setAgentsCollapsed] = useState(false);
+  const [governCollapsed, setGovernCollapsed] = useState(false);
   const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false);
 
   return (
@@ -1705,24 +1632,6 @@ export function Sidebar({
               onAdd={onAddRepository}
             />
           </div>
-          {isOpen && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn('h-7 w-7 text-foreground/50', noFocusRing)}
-              >
-                <Search className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn('h-7 w-7 text-foreground/50', noFocusRing)}
-              >
-                <SquarePen className="h-4 w-4" />
-              </Button>
-            </>
-          )}
         </div>
 
         {/* Nav */}
@@ -1788,16 +1697,25 @@ export function Sidebar({
                 ))}
             </div>
 
-            {/* Agents */}
-            <AgentsSection
-              agents={agents}
-              isOpen={isOpen}
-              sectionCollapsed={agentsCollapsed}
-              onToggleSection={() => setAgentsCollapsed(v => !v)}
-              activeAgentId={activeAgentId}
-              onSelectAgent={onSelectAgent}
-              onAddAgent={onAddAgent}
-            />
+            {/* Govern */}
+            <div className="flex flex-col gap-0.5">
+              {isOpen && (
+                <SectionHeader
+                  label="Govern"
+                  collapsed={governCollapsed}
+                  onToggle={() => setGovernCollapsed(v => !v)}
+                />
+              )}
+              {(!governCollapsed || !isOpen) && (
+                <Row
+                  icon={GitPullRequest}
+                  label="Review"
+                  isActive={currentView === 'review'}
+                  isOpen={isOpen}
+                  onClick={() => onNavigate('review')}
+                />
+              )}
+            </div>
 
             {/* Workspace */}
             <WorkspaceSection
@@ -1822,14 +1740,17 @@ export function Sidebar({
           </nav>
         </ScrollArea>
 
-        <SharedSection
-          workspaces={workspaces}
-          activeDocId={activeDocId}
-          onSelectDoc={onSelectDoc}
-          onRenameNode={onRenameNode}
-          onDeleteNode={onDeleteNode}
-          onToggleShare={onToggleShare}
-        />
+        {isOpen && (
+          <SharedSection
+            sharedNodes={sharedNodes ?? []}
+            loadingShared={loadingShared}
+            activeDocId={activeDocId}
+            onSelectDoc={onSelectDoc}
+            onRenameNode={onRenameNode}
+            onDeleteNode={onDeleteNode}
+            onToggleShare={onToggleShare}
+          />
+        )}
 
         {/* Footer */}
         <div className="flex shrink-0 flex-col gap-0.5 px-2 pb-2.5">
