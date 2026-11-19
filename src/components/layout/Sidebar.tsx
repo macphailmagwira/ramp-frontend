@@ -126,6 +126,8 @@ export interface AgentItem {
   icon?: React.ComponentType<{ className?: string }>;
 }
 
+export type DocSource = 'workspace' | 'shared';
+
 interface SidebarProps {
   currentView: ViewState;
   onNavigate: (view: ViewState) => void;
@@ -142,7 +144,9 @@ interface SidebarProps {
   loadingShared?: boolean;
   sharedNodes?: KnowledgeNode[];
   activeDocId?: string;
-  onSelectDoc?: (docId: string) => void;
+  activeDocWorkspaceId?: string;
+  sharedActiveDocId?: string;
+  onSelectDoc?: (docId: string, source: DocSource, workspaceId?: string) => void;
   onCreateWorkspace?: (label: string, icon: string, repo?: string | null) => void;
   onRenameWorkspace?: (id: string, label: string, icon: string, repo?: string | null) => void;
   onDeleteWorkspace?: (id: string) => void;
@@ -234,32 +238,41 @@ function Row({
 }
 
 // ─── Collapsible section header ──────────────────────────────────────────────
+// Single source of truth for Explore / Sync / Govern / Workspace headers so they
+// always share the same size, weight, and color. An optional trailing `action`
+// (e.g. the Workspace "+" button) sits in the same row without affecting the
+// label's typography.
 
 function SectionHeader({
   label,
   collapsed,
   onToggle,
+  action,
 }: {
   label: string;
   collapsed: boolean;
   onToggle: () => void;
+  action?: React.ReactNode;
 }) {
   return (
-    <button
-      onClick={onToggle}
-      className={cn(
-        'group flex h-6 w-full items-center gap-1 rounded px-2 text-xs font-medium text-foreground/55 hover:text-foreground/80',
-        noFocusRing
-      )}
-    >
-      <span>{label}</span>
-      <ChevronRight
+    <div className="flex h-6 w-full items-center gap-1">
+      <button
+        onClick={onToggle}
         className={cn(
-          'h-3 w-3 shrink-0 opacity-0 transition-transform group-hover:opacity-100',
-          !collapsed && 'rotate-90'
+          'group flex h-6 min-w-0 flex-1 items-center gap-1 rounded px-2 text-xs font-medium text-foreground/55 hover:text-foreground/80',
+          noFocusRing
         )}
-      />
-    </button>
+      >
+        <span>{label}</span>
+        <ChevronRight
+          className={cn(
+            'h-3 w-3 shrink-0 opacity-0 transition-transform group-hover:opacity-100',
+            !collapsed && 'rotate-90'
+          )}
+        />
+      </button>
+      {action}
+    </div>
   );
 }
 
@@ -557,6 +570,7 @@ function WorkspaceNodes({
   nodes,
   isOpen,
   activeDocId,
+  activeDocWorkspaceId,
   onSelectDoc,
   creating,
   onStartCreate,
@@ -570,7 +584,8 @@ function WorkspaceNodes({
   nodes: KnowledgeNode[];
   isOpen: boolean;
   activeDocId?: string;
-  onSelectDoc?: (docId: string) => void;
+  activeDocWorkspaceId?: string;
+  onSelectDoc?: (docId: string, source: DocSource, workspaceId?: string) => void;
   creating: { parentId: string | null; type: KnowledgeNodeType } | null;
   onStartCreate: (parentId: string | null, type: KnowledgeNodeType | null) => void;
   onCreateNode?: (workspaceId: string, parentId: string | null, type: KnowledgeNodeType, label: string) => void;
@@ -637,7 +652,7 @@ function WorkspaceNodes({
     const open = openNodes.has(node.id);
     const hasChildren = (node.children?.length ?? 0) > 0;
     const expandable = isFolder || hasChildren;
-    const active = !isFolder && activeDocId === node.id;
+    const active = !isFolder && activeDocId === node.id && activeDocWorkspaceId === workspaceId;
     const Icon = isFolder ? Folder : File;
 
     return (
@@ -674,7 +689,7 @@ function WorkspaceNodes({
             />
           ) : (
             <button
-              onClick={isFolder || hasChildren ? () => toggleNode(node.id) : () => onSelectDoc?.(node.id)}
+              onClick={isFolder || hasChildren ? () => toggleNode(node.id) : () => onSelectDoc?.(node.id, 'workspace', workspaceId)}
               style={{ paddingLeft: 20 + depth * 26 }}
               className={cn(
                 'flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md text-sm transition-colors',
@@ -784,6 +799,7 @@ function WorkspaceSection({
   sectionCollapsed,
   onToggleSection,
   activeDocId,
+  activeDocWorkspaceId,
   onSelectDoc,
   repositories = [],
   repository = null,
@@ -802,7 +818,8 @@ function WorkspaceSection({
   sectionCollapsed: boolean;
   onToggleSection: () => void;
   activeDocId?: string;
-  onSelectDoc?: (docId: string) => void;
+  activeDocWorkspaceId?: string;
+  onSelectDoc?: (docId: string, source: DocSource, workspaceId?: string) => void;
   repositories?: Repository[];
   repository?: Repository | null;
   onCreateWorkspace?: (label: string, icon: string, repo?: string | null) => void;
@@ -832,34 +849,34 @@ function WorkspaceSection({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="group flex h-6 w-full items-center gap-1 rounded">
-        <div className="flex-1">
-          <SectionHeader
-            label="Workspace"
-            collapsed={sectionCollapsed}
-            onToggle={onToggleSection}
-          />
-        </div>
-        <Tooltip delayDuration={0}>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => {
-                setEditing(null);
-                setModalOpen(true);
-              }}
-              aria-label="New workspace"
-              className={cn(
-                'group/add mr-1 flex h-5 w-5 items-center justify-center rounded text-foreground/45 transition-all duration-200 ease-out',
-                'hover:bg-foreground/[0.07] hover:text-foreground hover:shadow-sm active:scale-90',
-                noFocusRing
-              )}
-            >
-              <Plus className="h-3 w-3 transition-transform duration-200 ease-out group-hover/add:rotate-90 group-hover/add:scale-110" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">New workspace</TooltipContent>
-        </Tooltip>
-      </div>
+      {/* Same SectionHeader as Explore / Sync / Govern; the "+" is passed as a
+          trailing action so the label typography is identical. */}
+      <SectionHeader
+        label="Workspace"
+        collapsed={sectionCollapsed}
+        onToggle={onToggleSection}
+        action={
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => {
+                  setEditing(null);
+                  setModalOpen(true);
+                }}
+                aria-label="New workspace"
+                className={cn(
+                  'group/add mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded text-foreground/45 transition-all duration-200 ease-out',
+                  'hover:bg-foreground/[0.07] hover:text-foreground hover:shadow-sm active:scale-90',
+                  noFocusRing
+                )}
+              >
+                <Plus className="h-3 w-3 transition-transform duration-200 ease-out group-hover/add:rotate-90 group-hover/add:scale-110" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">New workspace</TooltipContent>
+          </Tooltip>
+        }
+      />
 
       {(!sectionCollapsed || !isOpen) && (
         <div className="flex flex-col gap-0.5">
@@ -927,6 +944,7 @@ function WorkspaceSection({
                       nodes={ws.nodes}
                       isOpen={isOpen}
                       activeDocId={activeDocId}
+                      activeDocWorkspaceId={activeDocWorkspaceId}
                       onSelectDoc={onSelectDoc}
                       creating={creating?.workspaceId === ws.id ? { parentId: creating.parentId, type: creating.type } : null}
                       onStartCreate={(parentId, type) =>
@@ -982,7 +1000,7 @@ function SharedSection({
   sharedNodes: KnowledgeNode[];
   loadingShared?: boolean;
   activeDocId?: string;
-  onSelectDoc?: (docId: string) => void;
+  onSelectDoc?: (docId: string, source: DocSource, workspaceId?: string) => void;
   onRenameNode?: (workspaceId: string, id: string, label: string) => void;
   onDeleteNode?: (workspaceId: string, id: string) => void;
   onToggleShare?: (workspaceId: string, id: string, shared: boolean) => void;
@@ -1068,7 +1086,7 @@ function SharedSection({
           </button>
         ) : (
           <button
-            onClick={() => onSelectDoc?.(node.id)}
+            onClick={() => onSelectDoc?.(node.id, 'shared')}
             style={{ paddingLeft: 16 }}
             className={cn(
               'flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md text-sm text-foreground/85',
@@ -1598,6 +1616,8 @@ export function Sidebar({
   sharedNodes = [],
   loadingShared = false,
   activeDocId,
+  activeDocWorkspaceId,
+  sharedActiveDocId,
   onSelectDoc,
   onCreateWorkspace,
   onRenameWorkspace,
@@ -1725,6 +1745,7 @@ export function Sidebar({
               sectionCollapsed={workspaceCollapsed}
               onToggleSection={() => setWorkspaceCollapsed(v => !v)}
               activeDocId={activeDocId}
+              activeDocWorkspaceId={activeDocWorkspaceId}
               onSelectDoc={onSelectDoc}
               onCreateWorkspace={onCreateWorkspace}
               onRenameWorkspace={onRenameWorkspace}
@@ -1744,7 +1765,7 @@ export function Sidebar({
           <SharedSection
             sharedNodes={sharedNodes ?? []}
             loadingShared={loadingShared}
-            activeDocId={activeDocId}
+            activeDocId={sharedActiveDocId}
             onSelectDoc={onSelectDoc}
             onRenameNode={onRenameNode}
             onDeleteNode={onDeleteNode}

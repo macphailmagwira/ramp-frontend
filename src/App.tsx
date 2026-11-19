@@ -19,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/components/ui/sonner';
 
 // Layout Components
-import { Sidebar, type KnowledgeNode, type Workspace, type AgentItem } from '@/components/layout/Sidebar';
+import { Sidebar, type KnowledgeNode, type Workspace, type AgentItem, type DocSource } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useCommandShortcuts } from '@/components/commandShortcuts';
@@ -181,9 +181,12 @@ function AppContent() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
 
-  // Workspaces are scoped to the active repo (via the backend `?repo=` filter),
-  // so whatever the backend returns is what we show.
-  const visibleWorkspaces = workspaces;
+  // The backend `?repo=` filter is the source of truth, but keep a client-side
+  // guard too: a stale or over-broad response must never render another repo's
+  // workspaces under the active one. Unscoped workspaces (`repo: null`) stay visible.
+  const visibleWorkspaces = workspaces.filter(
+    (w) => !w.repo || !selectedRepository || w.repo === selectedRepository.fullName
+  );
 
   // Shared nodes are global across all repos, fetched separately.
   const [sharedNodes, setSharedNodes] = useState<KnowledgeNode[]>([]);
@@ -200,10 +203,14 @@ function AppContent() {
   const [, forceDispatch] = useReducer((x: number) => x + 1, 0);
   const force = () => forceDispatch();
 
-  const fetchWorkspaces = useCallback(async () => {
+  const workspacesRequestId = useRef(0);
+
+  const fetchWorkspaces = useCallback(async (repoFullName: string | null) => {
+    const requestId = ++workspacesRequestId.current;
     setLoadingWorkspaces(true);
+    setWorkspaces([]);
     try {
-      const list = await api.workspaces.list(selectedRepository?.fullName ?? null);
+      const list = await api.workspaces.list(repoFullName);
       const withNodes = await Promise.all(
         list.map(async (ws) => {
           let nodes: KnowledgeNode[] = [];
@@ -215,13 +222,21 @@ function AppContent() {
           return { ...ws, nodes };
         })
       );
+      if (requestId !== workspacesRequestId.current) return;
       setWorkspaces(withNodes);
     } catch (err) {
+      if (requestId !== workspacesRequestId.current) return;
       console.error('Failed to load workspaces', err);
     } finally {
-      setLoadingWorkspaces(false);
+      if (requestId === workspacesRequestId.current) setLoadingWorkspaces(false);
     }
-  }, [selectedRepository?.fullName]);
+  }, []);
+
+  useEffect(() => {
+    const repoFullName = selectedRepository?.fullName ?? null;
+    if (isAuthenticating || !repoFullName) return;
+    void fetchWorkspaces(repoFullName);
+  }, [selectedRepository?.fullName, isAuthenticating, fetchWorkspaces]);
 
   // Shared nodes are global (not repo-scoped), so they're fetched independently
   // of the active repo's workspace list above.
@@ -344,6 +359,8 @@ function AppContent() {
     }, 600);
   }, [fetchSharedNodes]);
   const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
+  const [activeDocSource, setActiveDocSource] = useState<DocSource>('workspace');
+  const [activeDocWorkspaceId, setActiveDocWorkspaceId] = useState<string | undefined>(undefined);
   const [saveStatus, setSaveStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({});
   const prevViewRef = useRef<ViewState>('overview');
   const [enabledAgentIds, setEnabledAgentIds] = useState<Set<string>>(() => new Set());
@@ -397,7 +414,6 @@ function AppContent() {
 
   const navigateToDashboard = useCallback(async (currentUser: User) => {
     setUser(currentUser);
-    fetchWorkspaces();
     void fetchSharedNodes();
     try {
       setGithubConnected(null);
@@ -428,7 +444,7 @@ function AppContent() {
     } finally {
       setIsAuthenticating(false);
     }
-  }, [loadConnectedRepositories, loadRepositories, fetchWorkspaces, fetchSharedNodes]);
+  }, [loadConnectedRepositories, loadRepositories, fetchSharedNodes]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -494,6 +510,7 @@ function AppContent() {
     setConnectedRepositories([]);
     setConnectedRepoId(null);
     setSelectedRepository(null);
+    setWorkspaces([]);
     localStorage.removeItem('ramp_user');
     localStorage.removeItem(connectedRepoKey(user?.id));
     localStorage.removeItem('ramp_token');
@@ -520,7 +537,6 @@ function AppContent() {
       localStorage.setItem(connectedRepoKey(user?.id), response.id);
       setSelectedRepository(repo);
       await loadConnectedRepositories();
-      void fetchWorkspaces();
       void fetchSharedNodes();
       setView('repository-analysis');
     } catch (err) {
@@ -533,7 +549,6 @@ function AppContent() {
     setConnectedRepoId(repo.id);
     localStorage.setItem(connectedRepoKey(user?.id), repo.id);
     setView('overview');
-    void fetchWorkspaces();
     void fetchSharedNodes();
   };
 
@@ -849,9 +864,11 @@ function AppContent() {
     return () => document.removeEventListener('visibilitychange', onHide);
   }, [flushSave]);
 
-  const handleSelectDoc = (docId: string) => {
+  const handleSelectDoc = (docId: string, source: DocSource, workspaceId?: string) => {
     flushSave();
     setActiveDocId(docId);
+    setActiveDocSource(source);
+    setActiveDocWorkspaceId(source === 'workspace' ? workspaceId : undefined);
     setView(v => {
       if (v !== 'docs') prevViewRef.current = v;
       return 'docs';
@@ -1103,7 +1120,9 @@ function AppContent() {
         loadingWorkspaces={loadingWorkspaces}
         loadingShared={loadingShared}
         sharedNodes={sharedNodes}
-        activeDocId={activeDocId}
+        activeDocId={view === 'docs' && activeDocSource === 'workspace' ? activeDocId : undefined}
+        activeDocWorkspaceId={view === 'docs' && activeDocSource === 'workspace' ? activeDocWorkspaceId : undefined}
+        sharedActiveDocId={view === 'docs' && activeDocSource === 'shared' ? activeDocId : undefined}
         onSelectDoc={handleSelectDoc}
         onCreateWorkspace={handleCreateWorkspace}
         onRenameWorkspace={handleRenameWorkspace}
