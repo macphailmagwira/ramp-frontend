@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ApiUser } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,18 +21,20 @@ import {
   Mail,
   Lock,
   User,
+  Building2,
   ArrowRight,
   AlertCircle,
 } from 'lucide-react';
 
 interface SignupPageProps {
-  onSignup: (user: any, token: string) => void;
+  onSignup: (user: ApiUser, token: string) => void;
   onNavigate: (view: 'login' | 'signup') => void;
 }
 
 export function SignupPage({ onSignup, onNavigate }: SignupPageProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -59,7 +62,7 @@ export function SignupPage({ onSignup, onNavigate }: SignupPageProps) {
       const nameParts = name.trim().split(' ');
       const firstName = nameParts[0] || name;
       const lastName = nameParts.slice(1).join(' ') || name;
-      const data = await api.users.signup(firstName, lastName, email, password);
+      const data = await api.users.signup(firstName, lastName, email, password, companyName.trim());
       onSignup(data.user, data.token);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed');
@@ -95,6 +98,22 @@ export function SignupPage({ onSignup, onNavigate }: SignupPageProps) {
                   placeholder="John Doe"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="company">Company name</Label>
+              <div className="relative">
+                <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                <Input
+                  id="company"
+                  type="text"
+                  placeholder="Acme Inc"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
                   className="pl-10"
                   required
                 />

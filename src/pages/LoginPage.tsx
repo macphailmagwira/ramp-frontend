@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ApiUser } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 
 interface LoginPageProps {
-  onLogin: (user: any, token: string) => void;
+  onLogin: (user: ApiUser, token: string) => void;
   onNavigate: (view: 'login' | 'signup') => void;
 }
 

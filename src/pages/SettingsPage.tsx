@@ -1,11 +1,24 @@
-import { useState } from 'react';
-import type { User } from '@/types';
+import { useEffect, useState } from 'react';
+import type { AccountResponse, GitHubConnectionStatus, User } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useTheme } from '@/contexts/ThemeContext';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { gradientFor, initialsOf } from '@/lib/avatar';
 import {
@@ -133,25 +146,88 @@ function UserAvatar({ user }: { user: User | null }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export function SettingsPage({ user }: SettingsPageProps) {
+export function SettingsPage({ user, onLogout }: SettingsPageProps) {
   const { theme, setTheme } = useTheme();
+
+  const [account, setAccount] = useState<AccountResponse | null>(null);
+  const [companyName, setCompanyName] = useState('');
+  const [github, setGithub] = useState<GitHubConnectionStatus | null>(null);
+  const [githubLoading, setGithubLoading] = useState(true);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    api.accounts.getMe()
+      .then((data) => {
+        if (!active) return;
+        setAccount(data);
+        setCompanyName(data.name);
+      })
+      .catch(() => {
+        if (active) setAccount(null);
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    api.users.getMe()
+      .then((data) => {
+        if (active) setGithub(data.github ?? null);
+      })
+      .catch(() => {
+        if (active) setGithub(null);
+      })
+      .finally(() => {
+        if (active) setGithubLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const isAdmin = (account?.role ?? user?.accountRole) === 'admin';
 
   const [notifications, setNotifications] = useState({
     email: true,
-    push: false,
-    analysis: true,
-    team: true,
   });
 
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const handleSave = async () => {
+    const nextName = companyName.trim();
+    if (isAdmin && account && nextName && nextName !== account.name) {
+      setIsSaving(true);
+      try {
+        const updated = await api.accounts.update(nextName);
+        setAccount(updated);
+        setCompanyName(updated.name);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to update company name');
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
     setIsSaving(true);
     await new Promise((r) => setTimeout(r, 900));
     setIsSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      await api.accounts.delete();
+      onLogout?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete account');
+      setIsDeleting(false);
+      setDeleteOpen(false);
+    }
   };
 
   const toggle = (key: keyof typeof notifications) =>
@@ -163,7 +239,14 @@ export function SettingsPage({ user }: SettingsPageProps) {
 
         {/* Page header */}
         <div className="mb-10">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Settings</h1>
+          <div className="flex items-center gap-2.5 mb-1">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Settings</h1>
+            {(account?.role || user?.accountRole) && (
+              <Badge variant="outline" className="capitalize text-[11px]">
+                {account?.role ?? user?.accountRole}
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground">Manage your account and preferences.</p>
         </div>
 
@@ -212,8 +295,17 @@ export function SettingsPage({ user }: SettingsPageProps) {
                     <Input type="email" defaultValue={user?.email} className="h-9 text-sm" />
                   </Field>
                 </div>
-                <Field label="Company">
-                  <Input placeholder="Acme Corp" className="h-9 text-sm" />
+                <Field
+                  label="Company"
+                  hint={!isAdmin ? 'Only account admins can rename the company.' : undefined}
+                >
+                  <Input
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    disabled={!isAdmin}
+                    placeholder="Acme Corp"
+                    className="h-9 text-sm"
+                  />
                 </Field>
                 <Field label="Bio">
                   <Input placeholder="A short description about you" className="h-9 text-sm" />
@@ -245,33 +337,37 @@ export function SettingsPage({ user }: SettingsPageProps) {
             </Section>
 
             {/* Danger zone */}
-            <Section
-              title="Danger zone"
-              description="Permanent, irreversible actions for your account."
-              danger
-            >
-              <div className="flex items-start justify-between gap-6">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 shrink-0 w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center">
-                    <AlertTriangle className="w-4 h-4 text-destructive" />
+            {isAdmin && (
+              <Section
+                title="Danger zone"
+                description="Permanent, irreversible actions for your account."
+                danger
+              >
+                <div className="flex items-start justify-between gap-6">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 shrink-0 w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center">
+                      <AlertTriangle className="w-4 h-4 text-destructive" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Delete account</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                        Permanently removes the company, all members, repositories, and documents.
+                        Existing sessions stop working immediately. This cannot be undone.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Delete account</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                      Permanently removes your account, all repositories, and team data. This cannot be undone.
-                    </p>
-                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="shrink-0 h-8 text-xs"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    Delete
+                  </Button>
                 </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="shrink-0 h-8 text-xs"
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                  Delete
-                </Button>
-              </div>
-            </Section>
+              </Section>
+            )}
           </TabsContent>
 
           {/* ── Notifications ── */}
@@ -286,24 +382,6 @@ export function SettingsPage({ user }: SettingsPageProps) {
                 checked={notifications.email}
                 onCheckedChange={() => toggle('email')}
               />
-              <ToggleRow
-                label="Push notifications"
-                description="Browser notifications for real-time alerts"
-                checked={notifications.push}
-                onCheckedChange={() => toggle('push')}
-              />
-              <ToggleRow
-                label="Analysis complete"
-                description="Notify me when a repository analysis finishes"
-                checked={notifications.analysis}
-                onCheckedChange={() => toggle('analysis')}
-              />
-              <ToggleRow
-                label="Team activity"
-                description="Updates when teammates connect repos or change settings"
-                checked={notifications.team}
-                onCheckedChange={() => toggle('team')}
-              />
             </Section>
           </TabsContent>
 
@@ -313,67 +391,47 @@ export function SettingsPage({ user }: SettingsPageProps) {
               title="Connected services"
               description="Link third-party accounts to enhance Ramp."
             >
-              {[
-                {
-                  id: 'github',
-                  name: 'GitHub',
-                  status: 'Connected as @sarahchen',
-                  connected: true,
-                  icon: (
+              <div className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
                     <Github className="h-4.5 w-4.5" />
-                  ),
-                  iconBg: 'bg-muted',
-                },
-                {
-                  id: 'slack',
-                  name: 'Slack',
-                  status: 'Not connected',
-                  connected: false,
-                  icon: (
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
-                    </svg>
-                  ),
-                  iconBg: 'bg-[#4A154B]',
-                },
-              ].map((svc) => (
-                <div
-                  key={svc.id}
-                  className="flex items-center justify-between gap-4 py-4 border-b border-border/40 last:border-0 last:pb-0 first:pt-0"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-foreground',
-                        svc.iconBg,
-                        svc.iconBg === 'bg-[#4A154B]' && 'text-white'
-                      )}
-                    >
-                      {svc.icon}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{svc.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                        {svc.connected && (
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        )}
-                        {svc.status}
-                      </p>
-                    </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      'h-8 text-xs shrink-0',
-                      !svc.connected && 'gap-1.5'
-                    )}
-                  >
-                    {!svc.connected && <Link2 className="h-3 w-3" />}
-                    {svc.connected ? 'Disconnect' : 'Connect'}
-                  </Button>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">GitHub</p>
+                    <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                      {githubLoading ? (
+                        'Checking connection…'
+                      ) : github?.is_connected ? (
+                        <>
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Connected as @{github.github_username ?? 'your account'}
+                        </>
+                      ) : (
+                        'Not connected'
+                      )}
+                    </p>
+                  </div>
                 </div>
-              ))}
+                {!githubLoading &&
+                  (github?.is_connected ? (
+                    <Badge variant="secondary" className="gap-1.5">
+                      <Check className="h-3 w-3" />
+                      Connected
+                    </Badge>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs"
+                      onClick={() => {
+                        window.location.href = api.github.getLoginUrl();
+                      }}
+                    >
+                      <Link2 className="h-3 w-3" />
+                      Connect
+                    </Button>
+                  ))}
+              </div>
             </Section>
           </TabsContent>
 
@@ -429,6 +487,32 @@ export function SettingsPage({ user }: SettingsPageProps) {
           </TabsContent>
 
         </Tabs>
+
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this account?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently removes {account?.name ? `“${account.name}”` : 'your company'},
+                all members, connected repositories, workspaces, and documents. Everyone will be
+                signed out immediately. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeleting}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void handleDeleteAccount();
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? 'Deleting…' : 'Delete account'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

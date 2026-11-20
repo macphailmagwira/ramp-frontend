@@ -63,7 +63,6 @@ import {
   GitFork,
   Info,
   LogOut,
-  User as UserIcon,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -430,7 +429,7 @@ function KnowledgeOptionsControl({
   /** False for shared nodes viewed outside their owning workspace. */
   editable: boolean;
   onRename: (id: string) => void;
-  onDelete: (id: string) => void;
+  onDelete?: (id: string) => void;
   onToggleShare?: (id: string, shared: boolean) => void;
   reveal?: string;
   alwaysShow?: boolean;
@@ -481,7 +480,7 @@ function KnowledgeOptionsControl({
                   Rename
                 </button>
               )}
-              {editable && (
+              {onDelete && (
                 <button
                   onClick={() => {
                     setOpen(false);
@@ -927,7 +926,7 @@ function WorkspaceSection({
                         setEditing(w ?? null);
                         setModalOpen(true);
                       }}
-                      onDelete={id => onDeleteWorkspace?.(id)}
+                      onDelete={ws.role === 'owner' ? (id) => onDeleteWorkspace?.(id) : undefined}
                     />
                     <KnowledgeAddControl
                       alwaysShow
@@ -1561,13 +1560,6 @@ function UserFooter({
         side="top"
         className={cn('w-56 p-1', noFocusRing)}
       >
-        <DropdownMenuItem
-          onClick={() => onNavigate('settings')}
-          className={cn('focus:bg-foreground/[0.045] focus:text-foreground', noFocusRing)}
-        >
-          <UserIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">Profile</span>
-        </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => onNavigate('team')}
           className={cn('focus:bg-foreground/[0.045] focus:text-foreground', noFocusRing)}

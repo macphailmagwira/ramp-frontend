@@ -14,7 +14,6 @@ import {
   Boxes,
   Network,
   BookOpen,
-  Zap,
   AlertCircle,
   type LucideProps,
 } from 'lucide-react';
@@ -163,13 +162,10 @@ export function RepositoryAnalysisPage({ repository, repoId, onComplete }: Repos
       <div className="relative w-full max-w-xl animate-fade-in-up">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-primary-foreground shadow-sm mb-6">
-            <Zap className="h-8 w-8" strokeWidth={2} />
-          </div>
           <h1 className="font-heading text-3xl font-bold mb-2 tracking-tight">
             Analyzing repository
           </h1>
-          <p className="text-muted-foreground font-mono text-sm">
+          <p className="text-muted-foreground text-sm">
             {repository.fullName}
           </p>
         </div>
@@ -178,7 +174,7 @@ export function RepositoryAnalysisPage({ repository, repoId, onComplete }: Repos
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2.5">
             <span className="text-[13px] font-medium text-foreground">Overall progress</span>
-            <span className="text-[13px] text-muted-foreground tabular-nums font-mono">
+            <span className="text-[13px] text-muted-foreground tabular-nums">
               {Math.round(overallProgress)}%
             </span>
           </div>

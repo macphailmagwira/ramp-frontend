@@ -10,9 +10,8 @@ const STATIC_GREYS = [
 ];
 
 
-import type { ViewState, Repository, User, ApiRepository, ApiConnectedRepository, DocBlock, ApiKnowledgeNode } from '@/types';
-import { mockTeamMembers } from '@/data/mock';
-import { api, getToken, setToken } from '@/lib/api';
+import type { ViewState, Repository, User, ApiUser, ApiRepository, ApiConnectedRepository, DocBlock, ApiKnowledgeNode } from '@/types';
+import { api, getToken, setToken, onUnauthorized } from '@/lib/api';
 import { Video, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -77,27 +76,29 @@ const toConnectedRepository = (r: ApiConnectedRepository): Repository => ({
   analysisProgress: 0,
 });
 
-const toUser = (apiUser: any): User => {
+const toUser = (apiUser: ApiUser): User => {
   // getMe derives the user from the Bearer token. GitHub-sourced accounts have
   // no first_name/last_name; their identity lives under `github.github_username`.
-  const gh = apiUser.github ?? {};
+  const gh = apiUser.github;
   const full = `${apiUser.first_name ?? ''} ${apiUser.last_name ?? ''}`.trim();
   const name =
     full ||
-    gh.github_username ||
-    gh.login ||
+    gh?.github_username ||
     (apiUser.email ? apiUser.email.split('@')[0] : '') ||
     'User';
 
   const email = apiUser.email ?? '';
   const id = String(apiUser.id ?? '');
+  const accountRole = apiUser.account_role ?? null;
 
   return {
     id,
     name,
     email,
     avatar: apiUser.avatar || '',
-    role: 'owner' as const,
+    role: accountRole === 'admin' ? 'admin' : 'member',
+    accountId: apiUser.account_id ? String(apiUser.account_id) : null,
+    accountRole,
   };
 };
 
@@ -204,6 +205,7 @@ function AppContent() {
   const force = () => forceDispatch();
 
   const workspacesRequestId = useRef(0);
+  const logoutRef = useRef<() => void>(() => {});
 
   const fetchWorkspaces = useCallback(async (repoFullName: string | null) => {
     const requestId = ++workspacesRequestId.current;
@@ -219,7 +221,7 @@ function AppContent() {
           } catch {
             /* tree unavailable for this workspace */
           }
-          return { ...ws, nodes };
+          return { ...ws, icon: ws.icon || '📘', nodes };
         })
       );
       if (requestId !== workspacesRequestId.current) return;
@@ -465,8 +467,7 @@ function AppContent() {
         return;
       }
       try {
-        const me = await api.users.getMe();
-        const apiUser = me?.user ?? me;
+        const apiUser = await api.users.getMe();
         const u = toUser(apiUser);
         localStorage.setItem('ramp_user', JSON.stringify(u));
         const savedRepoId = localStorage.getItem(connectedRepoKey(u.id));
@@ -485,19 +486,18 @@ function AppContent() {
   }, [navigateToDashboard]);
 
   useEffect(() => {
-    const handler = () => handleLogout();
-    window.addEventListener('ramp:unauthorized', handler);
-    return () => window.removeEventListener('ramp:unauthorized', handler);
+    onUnauthorized(() => logoutRef.current());
+    return () => onUnauthorized(() => {});
   }, []);
 
-  const handleLogin = async (apiUser: any, token: string) => {
+  const handleLogin = async (apiUser: ApiUser, token: string) => {
     setToken(token);
     const u = toUser(apiUser);
     localStorage.setItem('ramp_user', JSON.stringify(u));
     navigateToDashboard(u);
   };
 
-  const handleSignup = async (apiUser: any, token: string) => {
+  const handleSignup = async (apiUser: ApiUser, token: string) => {
     setToken(token);
     const u = toUser(apiUser);
     localStorage.setItem('ramp_user', JSON.stringify(u));
@@ -516,6 +516,7 @@ function AppContent() {
     localStorage.removeItem('ramp_token');
     setView('login');
   };
+  logoutRef.current = handleLogout;
 
   const handleSelectRepository = async (repo: Repository) => {
     try {
@@ -538,6 +539,7 @@ function AppContent() {
       setSelectedRepository(repo);
       await loadConnectedRepositories();
       void fetchSharedNodes();
+      void fetchWorkspaces(repo.fullName);
       setView('repository-analysis');
     } catch (err) {
       console.error('Failed to connect repository:', err);
@@ -749,7 +751,7 @@ function AppContent() {
   const handleCreateWorkspace = async (label: string, icon: string, repo?: string | null) => {
     try {
       const ws = await api.workspaces.create({ label, icon, repo: repo ?? null });
-      setWorkspaces(prev => [...prev, { ...ws, nodes: [] }]);
+      setWorkspaces(prev => [...prev, { ...ws, icon: ws.icon || icon || '📘', nodes: [] }]);
     } catch (err) {
       console.error('Failed to create workspace', err);
     }
@@ -1025,7 +1027,7 @@ function AppContent() {
           />
         );
       case 'team':
-        return <TeamPage members={mockTeamMembers} />;
+        return <TeamPage user={user} onLogout={handleLogout} />;
       case 'settings':
         return <SettingsPage user={user} onLogout={handleLogout} />;
       case 'agents':

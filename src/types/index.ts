@@ -18,6 +18,8 @@ export interface User {
   email: string;
   avatar: string;
   role: 'owner' | 'admin' | 'member';
+  accountId?: string | null;
+  accountRole?: AccountRole | null;
 }
 
 export interface TeamMember {
@@ -110,12 +112,34 @@ export interface GitHubConnectionStatus {
   connected_at: string | null;
 }
 
+export type AccountRole = 'admin' | 'member';
+
+export interface AccountResponse {
+  id: string;
+  name: string;
+  role: AccountRole;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccountMemberResponse {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: AccountRole;
+  created_at: string;
+}
+
 export interface ApiUser {
   id: string;
   first_name: string;
   last_name: string;
   email: string;
   github: GitHubConnectionStatus | null;
+  avatar?: string | null;
+  account_id?: string | null;
+  account_role?: AccountRole | null;
   created_at: string;
   updated_at: string;
 }

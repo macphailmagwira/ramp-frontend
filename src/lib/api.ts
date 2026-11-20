@@ -1,4 +1,4 @@
-import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository,   StorybookBookResponse, StorybookFileContentResponse, ArchitectureStoryResponse, ApiKnowledgeNode, ContentResponse, PutContentRequest, VersionSummary, VersionDetail, RestoreVersionResponse, WorkspaceMember, WorkspaceRole, ApiInboxItem } from '@/types';
+import type { ApiRepository, ApiFlowNode, ApiFlowEdge, FlowStoryResponse, ApiFlowGraph, DiscoverFlowsResponse, ApiOverviewResponse, ApiConnectedRepository,   StorybookBookResponse, StorybookFileContentResponse, ArchitectureStoryResponse, ApiKnowledgeNode, ContentResponse, PutContentRequest, VersionSummary, VersionDetail, RestoreVersionResponse, WorkspaceMember, WorkspaceRole, ApiInboxItem, ApiUser, AccountResponse, AccountMemberResponse } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -114,6 +114,10 @@ export const api = {
       // must not trigger the global logout, which would clear `user` while
       // navigateToDashboard then routes to the connect-github gate.
       return request('/github/connected-repositories', {}, { skipSessionLogout: true });
+    },
+
+    disconnectRepository: async (id: string): Promise<void> => {
+      await request(`/github/connected-repositories/${id}`, { method: 'DELETE' });
     },
   },
 
@@ -247,8 +251,9 @@ export const api = {
   },
 
   users: {
-    getMe: async (): Promise<any> => {
-      return request('/users/me');
+    getMe: async (): Promise<ApiUser> => {
+      const me = await request<ApiUser | { user: ApiUser }>('/users/me');
+      return 'user' in me ? me.user : me;
     },
 
     login: async (email: string, password: string) => {
@@ -264,18 +269,63 @@ export const api = {
       return res.json();
     },
 
-    signup: async (firstName: string, lastName: string, email: string, password: string) => {
+    signup: async (
+      firstName: string,
+      lastName: string,
+      email: string,
+      password: string,
+      companyName: string
+    ) => {
       const res = await fetch(`${API_BASE}/users/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ first_name: firstName, last_name: lastName, email, password }),
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          password,
+          company_name: companyName,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || 'Signup failed');
       }
-      return res.json();
+      return res.json() as Promise<{ user: ApiUser; token: string }>;
     },
+
+    addMember: async (payload: {
+      first_name: string;
+      last_name: string;
+      email: string;
+      password: string;
+    }): Promise<ApiUser> =>
+      request<ApiUser>('/users', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    remove: async (id: string): Promise<void> => {
+      await request(`/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+  },
+
+  accounts: {
+    getMe: async (): Promise<AccountResponse> =>
+      request<AccountResponse>('/accounts/me'),
+
+    update: async (name: string): Promise<AccountResponse> =>
+      request<AccountResponse>('/accounts/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      }),
+
+    delete: async (): Promise<void> => {
+      await request('/accounts/me', { method: 'DELETE' });
+    },
+
+    listMembers: async (): Promise<AccountMemberResponse[]> =>
+      request<AccountMemberResponse[]>('/accounts/me/members'),
   },
 
   overview: {
@@ -309,7 +359,7 @@ export const api = {
         '/workspaces' + (repo ? `?repo=${encodeURIComponent(repo)}` : '')
       ),
 
-    // All shared nodes across every workspace, ignoring repo scoping.
+    // Shared nodes within the current account, across every workspace.
     listShared: async (): Promise<ApiKnowledgeNode[]> =>
       request<ApiKnowledgeNode[]>('/workspaces/shared'),
 
@@ -478,7 +528,7 @@ export interface WorkspaceResponse {
   id: string;
   owner_id: string;
   label: string;
-  icon: string;
+  icon: string | null;
   role: WorkspaceRole;
   /** Per-repo boundary this workspace is scoped to (string|null). */
   repo: string | null;

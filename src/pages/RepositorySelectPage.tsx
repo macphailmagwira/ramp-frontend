@@ -61,17 +61,21 @@ export function RepositorySelectPage({
   const [selectedRepos, setSelectedRepos] = useState<Set<string>>(new Set());
   const { setTheme, resolvedTheme } = useTheme();
 
-  const connectedIds = useMemo(() => new Set(connectedRepositories.map(r => r.id)), [connectedRepositories]);
+  const connectedFullNames = useMemo(
+    () => new Set(connectedRepositories.map(r => r.fullName.toLowerCase())),
+    [connectedRepositories]
+  );
 
   const filteredRepos = useMemo(() => {
     return repositories.filter(
       (repo) =>
-        repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        !connectedFullNames.has(repo.fullName.toLowerCase()) &&
+        (repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         repo.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (repo.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (repo.language || '').toLowerCase().includes(searchQuery.toLowerCase())
+        (repo.language || '').toLowerCase().includes(searchQuery.toLowerCase()))
     );
-  }, [repositories, searchQuery]);
+  }, [repositories, searchQuery, connectedFullNames]);
 
   const toggleRepo = (repoId: string) => {
     const newSelected = new Set(selectedRepos);
@@ -309,7 +313,7 @@ export function RepositorySelectPage({
                 ) : (
                   <div className="divide-y divide-border/60">
                     {filteredRepos.map((repo) => {
-                      const isAlreadyConnected = connectedIds.has(repo.id);
+                      const isAlreadyConnected = connectedFullNames.has(repo.fullName.toLowerCase());
                       const isSelected = selectedRepos.has(repo.id);
                       return (
                         <div
